@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="PIXELDESIGN CRM — Hệ thống quản lý nội bộ Studio Thiết Kế Cao Cấp" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PIXELDESIGN CRM</title>
+
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Favicon inline SVG -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%238A724C'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-size='18' fill='white' font-family='Inter,sans-serif' font-weight='800'>P</text></svg>" />
+  <!-- PWA & Apple Web App -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#A0826D" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="PixelCRM" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════
+       LOGIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="login-screen">
+    <div class="login-card">
+
+      <!-- Brand -->
+      <div class="login-brand">
+        <div class="login-logo">
+          <!-- Pixel/Diamond icon -->
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h1>PIXEL<span>DESIGN</span></h1>
+        <p>Studio Thiết Kế Cao Cấp</p>
+      </div>
+
+      <!-- Divider -->
+      <div class="login-divider">
+        <span>Hệ thống nội bộ</span>
+      </div>
+
+      <!-- Description -->
+      <p class="login-desc">
+        Đăng nhập bằng tài khoản Google được cấp phép.<br />
+        Chỉ nhân sự trong hệ thống mới có thể truy cập.
+      </p>
+
+      <!-- Sign In Button -->
+      <button id="login-btn" onclick="App.signIn()">
+        <svg viewBox="0 0 24 24" class="google-icon">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Đăng nhập với Google
+      </button>
+
+      <!-- Error -->
+      <div id="login-error" class="hidden"></div>
+
+      <!-- Footer -->
+      <div class="login-footer">
+        Chỉ dành cho nhân sự PIXELDESIGN.<br />
+        Liên hệ Admin nếu không thể đăng nhập.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       APP SHELL (hidden until authenticated)
+  ══════════════════════════════════════════════════════════ -->
+  <div id="app-shell" class="hidden">
+
+    <!-- ─── Sidebar ──────────────────────────────────────── -->
+    <aside id="sidebar">
+
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="sidebar-logo-text">
+          <div class="app-name">PIXEL<span>DESIGN</span></div>
+          <div class="app-tag">CRM Studio</div>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav" role="navigation" aria-label="Menu chính">
+
+        <div class="nav-section-label">Quản lý đơn hàng</div>
+
+        <!-- Lên đơn -->
+        <div class="nav-item"
+             id="nav-don-hang"
+             data-page="don-hang"
+             data-role="admin-sale"
+             role="button"
+             tabindex="0"
+             aria-label="Lên đơn"
+             onclick="App.navigateTo('don-hang')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('don-hang')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </span>
+          <span class="nav-label">Lên đơn</span>
+        </div>
+
+        <!-- Kanban -->
+        <div class="nav-item"
+             id="nav-kanban"
+             data-page="kanban"
+             role="button"
+             tabindex="0"
+             aria-label="Kanban"
+             onclick="App.navigateTo('kanban')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('kanban')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </span>
+          <span class="nav-label">Kanban</span>
+        </div>
+
+        <!-- Khách hàng -->
+        <div class="nav-item"
+             id="nav-khach-hang"
+             data-page="khach-hang"
+             data-role="admin-sale"
+             role="button"
+             tabindex="0"
+             aria-label="Khách hàng"
+             onclick="App.navigateTo('khach-hang')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('khach-hang')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="nav-label">Khách hàng</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="nav-section-label">Kế toán & Lương</div>
+
+        <!-- Bảng lương -->
+        <div class="nav-item"
+             id="nav-bang-luong"
+             data-page="bang-luong"
+             role="button"
+             tabindex="0"
+             aria-label="Bảng lương"
+             onclick="App.navigateTo('bang-luong')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('bang-luong')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/>
+               <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/>
+               <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/>
+            </svg>
+          </span>
+          <span class="nav-label">Bảng lương</span>
+        </div>
+
+        <!-- Hiệu suất Designer -->
+        <div class="nav-item"
+             id="nav-hieu-suat"
+             data-page="hieu-suat"
+             data-role="admin-designer"
+             role="button"
+             tabindex="0"
+             aria-label="Hiệu suất Designer"
+             onclick="App.navigateTo('hieu-suat')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('hieu-suat')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+          </span>
+          <span class="nav-label">Hiệu suất Designer</span>
+        </div>
+
+        <!-- Hiệu suất Sale -->
+        <div class="nav-item"
+             id="nav-hieu-suat-sale"
+             data-page="hieu-suat-sale"
+             data-role="admin-sale"
+             role="button"
+             tabindex="0"
+             aria-label="Hiệu suất Sale"
+             onclick="App.navigateTo('hieu-suat-sale')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('hieu-suat-sale')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20V10"></path>
+              <path d="M18 20V4"></path>
+              <path d="M6 20v-4"></path>
+            </svg>
+          </span>
+          <span class="nav-label">Hiệu suất Sale</span>
+        </div>
+
+        <div class="nav-section-label" id="nav-section-tai-chinh" data-role="admin-sale">Tài chính</div>
+
+        <!-- Doanh thu Pixel -->
+        <div class="nav-item"
+             id="nav-doanh-thu"
+             data-page="doanh-thu"
+             data-role="admin-sale"
+             role="button"
+             tabindex="0"
+             aria-label="Doanh thu Pixel"
+             onclick="App.navigateTo('doanh-thu')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('doanh-thu')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+          </span>
+          <span class="nav-label">Doanh thu Pixel</span>
+          <span class="nav-badge-admin" style="background:#EDE4D6; color:#9C7E5E;">Admin/Sale</span>
+        </div>
+
+        <!-- Công nợ -->
+        <div class="nav-item"
+             id="nav-cong-no"
+             data-page="cong-no"
+             data-role="admin-sale"
+             role="button"
+             tabindex="0"
+             aria-label="Công nợ"
+             onclick="App.navigateTo('cong-no')"
+             onkeydown="if(event.key==='Enter') App.navigateTo('cong-no')">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+          </span>
+          <span class="nav-label">Công nợ</span>
+          <span class="nav-badge-admin" style="background:#EDE4D6; color:#9C7E5E;">Admin/Sale</span>
+        </div>
+
+
+      </nav>
+
+      <!-- User Profile -->
+      <div class="sidebar-user" onclick="App.showUserMenu(event)" title="Tùy chọn người dùng">
+        <div class="user-avatar" id="user-avatar">
+          <span>?</span>
+        </div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">Đang tải...</div>
+          <div class="user-role-badge" id="user-role"></div>
+        </div>
+        <button class="logout-btn"
+                id="logout-btn"
+                onclick="event.stopPropagation(); App.signOut()"
+                title="Đăng xuất"
+                aria-label="Đăng xuất">
+          <svg viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- ─── Main Content ──────────────────────────────────── -->
+    <main id="main-content">
+      <!-- Nút mở menu trên Mobile -->
+      <div id="mobile-top-bar">
+        <button id="mobile-menu-btn" aria-label="Mở menu">☰</button>
+      </div>
+      <div id="sidebar-overlay"></div>
+
+      <!-- Page Header -->
+      <header class="page-header">
+        <div class="page-header-left">
+          <h1 class="page-title" id="page-title">Lên đơn</h1>
+          <p class="page-subtitle" id="page-subtitle">Tạo và quản lý đơn hàng</p>
+        </div>
+        <div class="page-actions" id="page-actions">
+          <!-- Actions injected per page -->
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-body" id="page-content">
+        <!-- Content injected by JS -->
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ─── Toast Container ──────────────────────────────────── -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SCRIPTS (order matters)
+  ══════════════════════════════════════════════════════════ -->
+
+  <!-- 1. Config -->
+  <script src="config.js"></script>
+
+  <!-- 2. Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- 2. Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" id="gsi-script" async defer></script>
+
+  <!-- 3. App Logic -->
+  <script src="app.js"></script>
+
+  <!-- Script xử lý Mobile Menu -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const mobileBtn = document.getElementById('mobile-menu-btn');
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+
+      if (mobileBtn && sidebar && overlay) {
+        // Mở menu
+        mobileBtn.addEventListener('click', () => {
+          sidebar.classList.add('open');
+          overlay.classList.add('open');
+        });
+
+        // Đóng menu khi bấm lớp phủ
+        overlay.addEventListener('click', () => {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('open');
+        });
+
+        // Đóng menu khi bấm bất kỳ nav-item (link) nào trong sidebar
+        const navItems = sidebar.querySelectorAll('.nav-item');
+        navItems.forEach(item => {
+          item.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>
