@@ -7098,6 +7098,15 @@ const App = {
     } else {
        const rowsHtml = groupOrders.map(d => {
           const isGoc = d.ma_don === maGoc;
+          const gdListGrp = (this._giaoDichTienList || []).filter(g => g.ma_don === d.ma_don);
+          let daThucThuGrp = 0;
+          gdListGrp.forEach(g => { const t = App._parseCurrency(g.so_tien); if (!isNaN(t)) daThucThuGrp += t; });
+          const soPhaiThuGrp = App._tinhSoPhaiThu(d);
+          const isThuDuGrp = soPhaiThuGrp > 0 && daThucThuGrp >= soPhaiThuGrp;
+          const isHuyGrp = !!(d.trang_thai && d.trang_thai.toLowerCase().startsWith('h\u1ee7y'));
+          let dynStatusGrp = '\u0110ang ch\u1ea1y', stBgGrp = '#EDE6DA', stColorGrp = '#876B4D';
+          if (isHuyGrp) { dynStatusGrp = '\u0110\u00e3 h\u1ee7y'; stBgGrp = '#FCE9E9'; stColorGrp = '#B4453C'; }
+          else if (d.cot_kanban === 'Ho\u00e0n th\u00e0nh \u0111\u01a1n' && isThuDuGrp) { dynStatusGrp = 'Ho\u00e0n th\u00e0nh'; stBgGrp = '#E6F4EA'; stColorGrp = '#3B7A57'; }
           const bg = isGoc ? '#F5EFE6' : '#FFFFFF';
           const badge = isGoc ? `<span style="font-size:10px; font-weight:700; color:#9C7E5E; background:rgba(156,126,94,0.1); padding:2px 6px; border-radius:4px; margin-left:6px; display:inline-block;">ĐƠN GỐC</span>` : '';
           return `
@@ -7105,7 +7114,7 @@ const App = {
               <td style="padding:12px; font-weight:600; color:var(--clr-text);">${this._escHtml(d.ma_don)}${badge}</td>
               <td style="padding:12px; color:var(--clr-text); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${this._escHtml(d.item || '')}</td>
               <td style="padding:12px; color:var(--clr-text-muted);">${this._escHtml(d.ngay_len_don || '')}</td>
-              <td style="padding:12px;"><span style="font-size:12px; font-weight:600; padding:4px 8px; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--clr-text-muted);">${this._escHtml(d.trang_thai || '')}</span></td>
+              <td style="padding:12px;"><span style="font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; background:${stBgGrp}; color:${stColorGrp}; white-space:nowrap;">${dynStatusGrp}</span></td>
             </tr>
           `;
        }).join('');
