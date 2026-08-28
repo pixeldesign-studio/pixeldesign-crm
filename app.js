@@ -5094,6 +5094,158 @@ const App = {
     donHangList.forEach((d, idx) => { this._kanbanRowMap[d.ma_don] = idx + 2; });
 
     this._renderKanbanBoard();
+    this._batDauTuDongCapNhatKanban();
+  },
+
+  // ──────────────────────────────────────────────────────────
+  // BAO CO THAY DOI MOI TREN BANG KANBAN
+  //  - Cu 10 giay kiem 1 lan, chi doc 1 bang DON_HANG cho nhe
+  //  - Phat hien thay doi thi HIEN THONG BAO, khong tu ve lai
+  //  - Tab bi an  -> ngung hoi
+  //  - 15 phut khong ai dung -> NGU, cham vao la tinh day va kiem ngay
+  //  - Gap loi (vd 429 qua tai) -> gian nhip 10s > 20s > 40s > 80s roi tu ve lai
+  // ──────────────────────────────────────────────────────────
+  _kanbanAutoTimer: null,
+  _kanbanVanTay: '',
+  _kanbanVanTayBoQua: '',
+  _kanbanVanTayCho: '',
+  _kanbanLanCuoiDung: 0,
+  _kanbanSoLanLoi: 0,
+  _kanbanDaGanSuKien: false,
+  KANBAN_NHIP_MS: 10000,
+  KANBAN_NGU_SAU_MS: 15 * 60 * 1000,
+
+  _chuKyThe(d) {
+    return [d.cot_kanban, d.thu_tu, d.trang_thai, d.designer, d.ngay_het_han].join('|');
+  },
+
+  _taoVanTayKanban(list) {
+    return (list || []).map(d => d.ma_don + ':' + this._chuKyThe(d)).join(';');
+  },
+
+  _demThayDoiKanban(listMoi) {
+    const cu = {};
+    (this._kanbanData || []).forEach(d => { cu[d.ma_don] = this._chuKyThe(d); });
+    let n = 0;
+    const thay = {};
+    (listMoi || []).forEach(d => {
+      thay[d.ma_don] = true;
+      if (cu[d.ma_don] === undefined || cu[d.ma_don] !== this._chuKyThe(d)) n++;
+    });
+    Object.keys(cu).forEach(ma => { if (!thay[ma]) n++; });
+    return n;
+  },
+
+  _batDauTuDongCapNhatKanban() {
+    clearTimeout(this._kanbanAutoTimer);
+    this._kanbanVanTay      = this._taoVanTayKanban(this._kanbanData);
+    this._kanbanVanTayBoQua = '';
+    this._kanbanSoLanLoi    = 0;
+    this._kanbanLanCuoiDung = Date.now();
+    this._goBangThongBaoKanban();
+    this._ganSuKienDanhThucKanban();
+    this._henKiemTraKanban();
+  },
+
+  _dungTuDongCapNhatKanban() {
+    clearTimeout(this._kanbanAutoTimer);
+    this._kanbanAutoTimer = null;
+    this._goBangThongBaoKanban();
+  },
+
+  _henKiemTraKanban(msTuChon) {
+    clearTimeout(this._kanbanAutoTimer);
+    const gianNhip = Math.pow(2, Math.min(this._kanbanSoLanLoi, 3));   // 1,2,4,8
+    const nhip = msTuChon || (this.KANBAN_NHIP_MS * gianNhip);
+    this._kanbanAutoTimer = setTimeout(() => this._kiemTraKanbanMoi(), nhip);
+  },
+
+  _dangNguKanban() {
+    return (Date.now() - this._kanbanLanCuoiDung) > this.KANBAN_NGU_SAU_MS;
+  },
+
+  _ganSuKienDanhThucKanban() {
+    if (this._kanbanDaGanSuKien) return;
+    this._kanbanDaGanSuKien = true;
+    const danhThuc = () => {
+      const vuaNgu = this._dangNguKanban();
+      this._kanbanLanCuoiDung = Date.now();
+      if (vuaNgu && this.currentPage === 'kanban') {
+        this._kanbanSoLanLoi = 0;
+        this._henKiemTraKanban(300);   // tinh day -> kiem ngay
+      }
+    };
+    ['mousedown', 'mousemove', 'keydown', 'touchstart', 'touchmove', 'wheel', 'scroll']
+      .forEach(ev => document.addEventListener(ev, danhThuc, { passive: true, capture: true }));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) danhThuc(); });
+  },
+
+  async _kiemTraKanbanMoi() {
+    if (this.currentPage !== 'kanban') { this._dungTuDongCapNhatKanban(); return; }
+    if (!this.session?.accessToken)    { this._henKiemTraKanban(30000); return; }
+    if (document.hidden)               { this._henKiemTraKanban(30000); return; }
+    if (this._dangNguKanban())         { this._henKiemTraKanban(60000); return; }
+
+    try {
+      const rows = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG);
+      const list = (rows || []).filter(d => d.da_an !== 'yes');
+      const vanTayMoi = this._taoVanTayKanban(list);
+      this._kanbanSoLanLoi = 0;
+
+      if (vanTayMoi === this._kanbanVanTay) {
+        this._goBangThongBaoKanban();
+      } else if (vanTayMoi !== this._kanbanVanTayBoQua) {
+        this._hienBangThongBaoKanban(this._demThayDoiKanban(list), vanTayMoi);
+      }
+    } catch (e) {
+      this._kanbanSoLanLoi++;
+      console.warn('[Kanban kiem tra] lan loi thu ' + this._kanbanSoLanLoi + ':', e.message);
+    }
+    if (this.currentPage === 'kanban') this._henKiemTraKanban();
+  },
+
+  _hienBangThongBaoKanban(soThayDoi, vanTayMoi) {
+    this._kanbanVanTayCho = vanTayMoi;
+    let box = document.getElementById('kb-thong-bao-moi');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'kb-thong-bao-moi';
+      box.style.cssText = 'position:fixed; left:50%; bottom:24px; transform:translateX(-50%);' +
+        'z-index:900; display:flex; align-items:center; gap:12px; max-width:calc(100vw - 24px);' +
+        'padding:10px 12px 10px 16px; border-radius:999px; background:#3F3428; color:#F5EFE6;' +
+        'box-shadow:0 6px 20px rgba(0,0,0,0.25); font-size:13px; font-weight:600;';
+      document.body.appendChild(box);
+      box.innerHTML =
+        '<span id="kb-thong-bao-chu" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>' +
+        '<button type="button" onclick="App._capNhatKanbanNgay()" style="flex-shrink:0; border:none; cursor:pointer;' +
+        'background:#C8A97E; color:#2B2318; font-weight:700; font-size:13px; padding:7px 14px; border-radius:999px;">Cập nhật</button>' +
+        '<button type="button" aria-label="Bỏ qua" onclick="App._boQuaThongBaoKanban()" style="flex-shrink:0; border:none;' +
+        'cursor:pointer; background:transparent; color:#C9BEB0; font-size:16px; line-height:1; padding:4px 6px;">✕</button>';
+    }
+    const chu = document.getElementById('kb-thong-bao-chu');
+    if (chu) chu.textContent = soThayDoi > 0
+      ? ('Có ' + soThayDoi + ' thay đổi mới trên bảng')
+      : 'Bảng có thay đổi mới';
+  },
+
+  _goBangThongBaoKanban() {
+    document.getElementById('kb-thong-bao-moi')?.remove();
+  },
+
+  _boQuaThongBaoKanban() {
+    this._kanbanVanTayBoQua = this._kanbanVanTayCho || '';
+    this._goBangThongBaoKanban();
+  },
+
+  async _capNhatKanbanNgay() {
+    this._goBangThongBaoKanban();
+    const tuKhoa    = document.getElementById('kb-search-input')?.value || '';
+    const viTriCuon = document.getElementById('kb-board')?.scrollLeft || 0;
+    await this.renderKanbanPage();
+    if (tuKhoa) this._renderKanbanBoard(tuKhoa);
+    const board = document.getElementById('kb-board');
+    if (board) board.scrollLeft = viTriCuon;
+    this._showToast('Đã cập nhật bảng', 'success', 2000);
   },
 
   _renderKanbanBoard(filterQ = '') {
