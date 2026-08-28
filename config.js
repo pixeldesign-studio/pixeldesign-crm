@@ -71,6 +71,17 @@ const CONFIG = {
   },
 
   // ──────────────────────────────────────────────────────────
+  // LIÊN KẾT SANG APP ETSY
+  // CHỈ những email trong ETSY_USERS mới thấy tab này (admin không thấy —
+  // admin đi qua app TỔNG để mở các app con).
+  // Muốn cho thêm ai vào, thêm email của họ vào danh sách bên dưới.
+  // ──────────────────────────────────────────────────────────
+  ETSY_URL: 'https://etsy.pixeldesign.vn',
+  ETSY_USERS: [
+    'honghoa.giameco@gmail.com',
+  ],
+
+  // ──────────────────────────────────────────────────────────
   // CÀI ĐẶT KHÁC
   // ──────────────────────────────────────────────────────────
   APP_NAME:    'PIXELDESIGN CRM',
@@ -86,3 +97,4 @@ const CONFIG = {
 Object.freeze(CONFIG);
 Object.freeze(CONFIG.SHEETS);
 Object.freeze(CONFIG.ROLES);
+Object.freeze(CONFIG.ETSY_USERS);
