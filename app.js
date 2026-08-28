@@ -863,6 +863,13 @@ const App = {
       const isVisible = (role === CONFIG.ROLES.ADMIN || role === CONFIG.ROLES.DESIGNER);
       el.style.display = isVisible ? '' : 'none';
     });
+    // Tab sang app ETSY: CHI nhung email khai trong CONFIG.ETSY_USERS (admin khong thay)
+    const myEmail = (this.session?.email || '').toLowerCase().trim();
+    const etsyList = (CONFIG.ETSY_USERS || []).map(e => (e || '').toLowerCase().trim());
+    document.querySelectorAll('[data-role="etsy"]').forEach(el => {
+      const isVisible = etsyList.includes(myEmail);
+      el.style.display = isVisible ? '' : 'none';
+    });
   },
 
   /**
