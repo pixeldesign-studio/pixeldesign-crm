@@ -1017,7 +1017,7 @@ const App = {
   // xin token moi gan nhu khong hien popup (co nhay qua roi tu dong).
   // ──────────────────────────────────────────────────────────
 
-  async _lamMoiPhienNgam() {
+  async _lamMoiPhienNgam(imLang = true) {
     if (this._huaLamMoi) return this._huaLamMoi;
 
     this._huaLamMoi = new Promise((resolve) => {
@@ -1029,7 +1029,10 @@ const App = {
       this._dangLamMoiNgam = xong;
 
       try {
-        const xinToken = { prompt: '' };
+        // imLang=true  -> prompt:'' : khong hien gi (may tinh, Android)
+        // imLang=false -> cho Google hien giao dien. CHI goi khi nguoi dung
+        //                 vua CHAM, vi iOS chan cua so bat len neu khong co cu cham.
+        const xinToken = imLang ? { prompt: '' } : {};
         if (this.session?.email) xinToken.hint = this.session.email;
         this.tokenClient.requestAccessToken(xinToken);
       } catch (e) {
@@ -1048,17 +1051,60 @@ const App = {
     return await this._lamMoiPhienNgam();
   },
 
+  /**
+   * Phien het han. KHONG xoa session, KHONG da ra man dang nhap.
+   * Hien mot lop phu ngay tren man dang xem, co nut de nguoi dung CHAM.
+   * Cu cham do la thu iOS bat buoc phai co thi moi cho mo cua so Google.
+   */
   _phienDaHet() {
-    console.warn('[Auth] Phiên đã hết và không làm mới được. Yêu cầu đăng nhập lại.');
-    this._clearSession();
-    this.tokenClient = null;
-    try {
-      document.getElementById('app-shell')?.classList.add('hidden');
-      this._showLogin();
-      this._resetLoginButton();
-      this._showLoginError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-    } catch (e) {}
-    this._initGoogleTokenClient();
+    console.warn('[Auth] Phiên đã hết. Hiện bảng đăng nhập lại tại chỗ.');
+    if (document.getElementById('lop-phien-het')) return;   // da hien roi
+
+    const lop = document.createElement('div');
+    lop.id = 'lop-phien-het';
+    lop.style.cssText = 'position:fixed; inset:0; z-index:99999; display:flex;' +
+      'align-items:center; justify-content:center; padding:24px;' +
+      'background:rgba(43,35,24,0.55); backdrop-filter:blur(3px);';
+    lop.innerHTML =
+      '<div style="background:#FDFBF7; border-radius:18px; max-width:380px; width:100%;' +
+      'padding:28px 24px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.28);">' +
+        '<div style="font-size:38px; line-height:1; margin-bottom:14px;">🔒</div>' +
+        '<div style="font-size:17px; font-weight:800; color:#2B2318; margin-bottom:8px;">' +
+          'Phiên đăng nhập đã hết hạn</div>' +
+        '<div style="font-size:13.5px; color:#6B5F52; line-height:1.6; margin-bottom:20px;">' +
+          'Chạm nút bên dưới để tiếp tục. Bạn sẽ quay lại đúng màn hình đang xem, ' +
+          'không mất dữ liệu nào.</div>' +
+        '<button type="button" id="nut-dang-nhap-lai" ' +
+          'style="width:100%; border:none; cursor:pointer; background:#8A724C; color:#fff;' +
+          'font-size:15px; font-weight:700; padding:14px; border-radius:12px;">' +
+          'Đăng nhập lại</button>' +
+        '<div id="loi-dang-nhap-lai" style="font-size:12.5px; color:#B4453C; margin-top:12px; min-height:16px;"></div>' +
+      '</div>';
+    document.body.appendChild(lop);
+    document.getElementById('nut-dang-nhap-lai')
+      .addEventListener('click', () => this._dangNhapLaiTaiCho());
+  },
+
+  /**
+   * Chay khi nguoi dung CHAM nut. Vi co cu cham nen iOS cho mo cua so Google.
+   */
+  async _dangNhapLaiTaiCho() {
+    const nut  = document.getElementById('nut-dang-nhap-lai');
+    const oLoi = document.getElementById('loi-dang-nhap-lai');
+    if (nut)  { nut.disabled = true; nut.textContent = 'Đang mở Google...'; }
+    if (oLoi) oLoi.textContent = '';
+
+    const ok = await this._lamMoiPhienNgam(false);   // false = cho Google hien giao dien
+
+    if (ok) {
+      document.getElementById('lop-phien-het')?.remove();
+      try { if (this.currentPage) this.navigateTo(this.currentPage); } catch (e) {}
+      try { (this._showToast || this.showToast)?.call(this, 'Đã kết nối lại', 'success', 2000); } catch (e) {}
+      return;
+    }
+
+    if (nut)  { nut.disabled = false; nut.textContent = 'Thử lại'; }
+    if (oLoi) oLoi.textContent = 'Chưa kết nối được. Chạm "Thử lại", hoặc mở app bằng trình duyệt Safari thay vì icon màn hình chính.';
   },
 
   _batDauGiuPhien() {
