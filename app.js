@@ -217,6 +217,11 @@ const App = {
    * Callback nhận access_token từ Google.
    */
   async _handleTokenResponse(response) {
+    // Co token moi ve bang BAT KY duong nao -> go tam che "Phien da het han".
+    // Neu khong, tam che nam de len tren app da chay lai, nguoi dung tuong hong.
+    try {
+      if (response?.access_token) document.getElementById('lop-phien-het')?.remove();
+    } catch (e) {}
     // ── Nhanh LAM MOI NGAM: chi thay token moi, KHONG chay lai quy trinh dang nhap
     if (this._dangLamMoiNgam) {
       const xong = this._dangLamMoiNgam;
@@ -1040,7 +1045,11 @@ const App = {
         this._dangLamMoiNgam = null;
         xong(false);
       }
-      setTimeout(() => { this._dangLamMoiNgam = null; xong(false); }, 20000);
+      // Im lang thi 20 giay la du. Nhung khi NGUOI DUNG tu cham nut, ho con phai
+      // doc va chon tai khoan Google — 20 giay qua ngan. Het gio som se bao loi
+      // oan, dong thoi lam token ve sau bi lac sang luong dang nhap moi.
+      const hanCho = imLang ? 20000 : 5 * 60 * 1000;
+      setTimeout(() => { this._dangLamMoiNgam = null; xong(false); }, hanCho);
     }).finally(() => { this._huaLamMoi = null; });
 
     return this._huaLamMoi;
@@ -1091,10 +1100,30 @@ const App = {
   async _dangNhapLaiTaiCho() {
     const nut  = document.getElementById('nut-dang-nhap-lai');
     const oLoi = document.getElementById('loi-dang-nhap-lai');
+    // Huy lan cho cu (neu co) de moi lan cham la mot lan thu MOI thuc su,
+    // khong bi ket vao lan cho truoc do.
+    if (this._dangLamMoiNgam) {
+      const cu = this._dangLamMoiNgam;
+      this._dangLamMoiNgam = null;
+      try { cu(false); } catch (e) {}
+    }
+    this._huaLamMoi = null;
+
     if (nut)  { nut.disabled = true; nut.textContent = 'Đang mở Google...'; }
     if (oLoi) oLoi.textContent = '';
 
-    const ok = await this._lamMoiPhienNgam(false);   // false = cho Google hien giao dien
+    // Khi nguoi dung quay lai app (dong cua so Google, hoac chon xong tai khoan),
+    // mo khoa nut de ho co the cham lai neu can. Khong cho du 5 phut.
+    const moKhoaNut = () => {
+      if (document.hidden) return;
+      const n = document.getElementById('nut-dang-nhap-lai');
+      if (n && n.disabled) { n.disabled = false; n.textContent = 'Thử lại'; }
+    };
+    document.addEventListener('visibilitychange', moKhoaNut);
+
+    let ok = false;
+    try { ok = await this._lamMoiPhienNgam(false); }   // false = cho Google hien giao dien
+    finally { document.removeEventListener('visibilitychange', moKhoaNut); }
 
     if (ok) {
       document.getElementById('lop-phien-het')?.remove();
