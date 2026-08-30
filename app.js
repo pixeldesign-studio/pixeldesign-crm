@@ -1352,8 +1352,7 @@ const App = {
       <div class="form-group full-width">
         <label class="form-label" for="f-brief">Brief mô tả</label>
         ${this._thanhCongCuBrief('f-brief')}
-        <textarea class="form-textarea bf-o" id="f-brief" placeholder="Mô tả yêu cầu thiết kế: phong cách, màu sắc, kích thước, tham khảo...&#10;&#10;Bôi đen chữ rồi bấm nút phía trên để định dạng."></textarea>
-        <div class="bf-xem-hop" id="bf-xem-f-brief" style="display:none;"></div>
+        ${this._oSoanBrief('f-brief', '', 'Mô tả yêu cầu thiết kế: phong cách, màu sắc, kích thước, tham khảo…')}
       </div>
       <div class="form-group">
         <label class="form-label" for="f-sale">Sale phụ trách</label>
@@ -2138,7 +2137,7 @@ const App = {
     // Chỉ reset phần chi tiết đơn + tài chính + file
     ['f-item','f-don-cha'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const dt = document.getElementById('f-ngay-het-han'); if (dt) dt.value = '';
-    const brief = document.getElementById('f-brief'); if (brief) brief.value = '';
+    App._datBriefSoan('f-brief', '');   // xoa ca o soan thao lan o an
     const tv = document.getElementById('f-tong-gia-tri-display'); if (tv) tv.value = '';
     const th = document.getElementById('f-tong-gia-tri'); if (th) th.value = '0';
     const cv = document.getElementById('f-coc-display'); if (cv) cv.value = '';
@@ -2181,7 +2180,8 @@ const App = {
     const ddEl = document.getElementById('khach-search-dropdown'); if (ddEl) ddEl.style.display = 'none';
 
     // Reset các field còn lại
-    ['f-brand','f-brief'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['f-brand'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    App._datBriefSoan('f-brief', '');
     ['f-nganh','f-item','f-don-cha'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const dt = document.getElementById('f-ngay-het-han'); if (dt) dt.value = '';
     // Reset money fields (text display + hidden)
@@ -7226,13 +7226,12 @@ const App = {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                   BRIEF MÔ TẢ
                 </div>
-                ${!isDesigner ? `<button class="btn btn-ghost btn-sm" style="padding:4px 12px; height:auto; min-height:0; border-radius:12px; background:rgba(156,126,94,0.1); color:#9C7E5E; font-weight:600;" onclick="this.parentElement.nextElementSibling.style.display='none'; this.parentElement.parentElement.querySelector('#det-brief-bar-wrap').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief-upload-wrapper').style.display='block'; this.style.display='none';">Sửa</button>` : ''}
+                ${!isDesigner ? `<button class="btn btn-ghost btn-sm" style="padding:4px 12px; height:auto; min-height:0; border-radius:12px; background:rgba(156,126,94,0.1); color:#9C7E5E; font-weight:600;" onclick="this.parentElement.nextElementSibling.style.display='none'; this.parentElement.parentElement.querySelector('#det-brief-bar-wrap').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief-soan-wrap').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief-upload-wrapper').style.display='block'; this.style.display='none';">Sửa</button>` : ''}
               </div>
               <div class="kb-brief-display" style="font-size:14px; line-height:1.6; color:#2A2420; background:#FFFFFF; border:1px solid #EDE4D6; border-radius:10px; padding:16px;">${briefDisplay}</div>
               ${!isDesigner ? `
                 <div id="det-brief-bar-wrap" style="display:none;">${this._thanhCongCuBrief('det-brief')}</div>
-                <textarea class="form-textarea bf-o" id="det-brief" style="font-size:var(--font-size-sm); display:none; border-radius:10px; border-color:#EDE4D6;">${this._escHtml(don.brief || '')}</textarea>
-                <div class="bf-xem-hop" id="bf-xem-det-brief" style="display:none;"></div>
+                <div id="det-brief-soan-wrap" style="display:none;">${this._oSoanBrief('det-brief', don.brief || '', 'Nhập brief…')}</div>
                 <div id="det-brief-upload-wrapper" style="display:none; margin-top: 8px;">
                   <label class="btn btn-outline btn-sm" for="det-file-upload" style="cursor:pointer; display:inline-flex; width:auto; padding:4px 12px; margin-bottom: 4px; border-radius:8px; border-color:#EDE4D6; color:#9C7E5E;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -7463,11 +7462,31 @@ const App = {
     setTimeout(() => lop.remove(), 180);
   },
 
-  /** Dựng thanh công cụ cho một ô nhập brief. idO = id của textarea. */
+  // ════════════════════════════════════════════════════════════
+  // BRIEF — SOẠN THẤY LÀ ĐƯỢC       (nâng cấp 30/08/2026)
+  // ────────────────────────────────────────────────────────────
+  // Người dùng gõ và thấy NGAY chữ đậm, gạch đầu dòng thật, không
+  // còn nhìn thấy ký hiệu ** hay -.
+  //
+  // Cách làm: một ô soạn thảo (contenteditable) hiển thị định dạng
+  // thật, kèm MỘT Ô ẨN giữ bản ký hiệu. Mỗi lần gõ, ô soạn thảo
+  // được dịch ngược thành ký hiệu rồi ghi vào ô ẩn. Nhờ vậy toàn
+  // bộ code cũ đọc/ghi brief qua .value vẫn chạy y như trước, và
+  // Google Sheets vẫn chỉ nhận VĂN BẢN THUẦN.
+  //
+  //   ô soạn thảo (thấy chữ đậm)  ──dịch──>  ô ẩn (**chữ đậm**)  ──>  Sheets
+  //
+  // Lệnh định dạng dùng document.execCommand. Lệnh này bị đánh dấu
+  // "cũ" nhưng vẫn chạy trên mọi trình duyệt hiện nay kể cả Safari
+  // iPad, và không cần thư viện ngoài. Nếu sau này trình duyệt bỏ
+  // hẳn thì phải viết lại phần này — chỉ phần này, dữ liệu không sao.
+  // ════════════════════════════════════════════════════════════
+
+  /** Thanh công cụ. idO = id của ô ẩn giữ dữ liệu. */
   _thanhCongCuBrief(idO) {
     const n = (lenh, nhan, tip) =>
-      `<button type="button" class="bf-btn" title="${tip}" tabindex="-1"` +
-      ` onclick="App._dinhDangBrief('${idO}','${lenh}')">${nhan}</button>`;
+      `<button type="button" class="bf-btn" data-lenh="${lenh}" title="${tip}" tabindex="-1"` +
+      ` onmousedown="event.preventDefault()" onclick="App._dinhDangBrief('${idO}','${lenh}')">${nhan}</button>`;
     return `
       <div class="bf-bar" id="bf-bar-${idO}">
         ${n('dam', '<b>B</b>', 'Chữ đậm')}
@@ -7480,83 +7499,224 @@ const App = {
         <span class="bf-vach"></span>
         ${n('xoa', '&#10005;', 'Xoá định dạng')}
         <button type="button" class="bf-xem" tabindex="-1"
-                onclick="App._xemTruocBrief('${idO}')">Xem trước</button>
+                onclick="App._xemKyHieuBrief('${idO}')"
+                title="Xem đúng nội dung sẽ lưu vào Google Sheets">Xem ký hiệu</button>
       </div>`;
   },
 
-  /** Chèn / gỡ ký hiệu định dạng vào ô nhập. */
-  _dinhDangBrief(idO, lenh) {
-    const o = document.getElementById(idO);
-    if (!o) return;
-    // Đang ở chế độ xem trước thì quay lại ô gõ trước đã
-    const hopXem = document.getElementById('bf-xem-' + idO);
-    if (hopXem && hopXem.style.display !== 'none') this._xemTruocBrief(idO);
-
-    const val = o.value;
-    const dau = o.selectionStart, cuoi = o.selectionEnd;
-    const BO_DAU_DONG = /^(#{1,6}\s+|[-*]\s+|>\s?|\d+[.)]\s+)/;
-
-    // Bọc hai đầu vùng đang chọn (đậm / nghiêng).
-    // Đẩy khoảng trắng thừa ra NGOÀI cặp ký hiệu — bôi đen bằng chuột
-    // hay dính thêm dấu cách ở cuối, để nguyên sẽ ra "**chữ **" nhìn lệch.
-    const boc = (k) => {
-      let d = dau, c = cuoi;
-      while (d < c && /\s/.test(val[d]))     d++;
-      while (c > d && /\s/.test(val[c - 1])) c--;
-      const chon = val.slice(d, c) || 'chữ';
-      const moi = k + chon + k;
-      o.value = val.slice(0, d) + moi + val.slice(c);
-      o.setSelectionRange(d + k.length, d + k.length + chon.length);
-    };
-
-    // Thêm ký hiệu vào ĐẦU MỖI DÒNG trong vùng chọn
-    const theoDong = (fn) => {
-      let d = val.lastIndexOf('\n', dau - 1) + 1;
-      let c = val.indexOf('\n', cuoi);
-      if (c === -1) c = val.length;
-      const ketQua = fn(val.slice(d, c).split('\n')).join('\n');
-      o.value = val.slice(0, d) + ketQua + val.slice(c);
-      o.setSelectionRange(d, d + ketQua.length);
-    };
-    const sach = (l) => l.replace(BO_DAU_DONG, '');
-
-    switch (lenh) {
-      case 'dam':      boc('**'); break;
-      case 'nghieng':  boc('*');  break;
-      case 'tieude':   theoDong(ds => ds.map(l => sach(l).trim() ? '## ' + sach(l) : l)); break;
-      case 'gachdau':  theoDong(ds => ds.map(l => sach(l).trim() ? '- '  + sach(l) : l)); break;
-      case 'trichdan': theoDong(ds => ds.map(l => sach(l).trim() ? '> '  + sach(l) : l)); break;
-      case 'danhso':
-        theoDong(ds => { let i = 0; return ds.map(l => {
-          const s = sach(l);
-          return s.trim() ? (++i) + '. ' + s : l;
-        }); });
-        break;
-      case 'xoa':
-        theoDong(ds => ds.map(l => sach(l).replace(/\*+/g, '')));
-        break;
-    }
-    o.focus();
-    o.dispatchEvent(new Event('input', { bubbles: true }));
+  /** Dựng ô soạn thảo + ô ẩn. vanBan = nội dung ban đầu (dạng ký hiệu). */
+  _oSoanBrief(idO, vanBan, goiY) {
+    const rong = !String(vanBan || '').trim();
+    return `
+      <div class="bf-soan${rong ? ' bf-rong' : ''}" id="${idO}-soan"
+           contenteditable="true" spellcheck="false"
+           data-goi-y="${this._escHtml(goiY || '')}"
+           oninput="App._dongBoBrief('${idO}')"
+           onkeyup="App._capNhatNutBrief('${idO}')"
+           onmouseup="App._capNhatNutBrief('${idO}')"
+           onpaste="App._danBrief(event,'${idO}')">${this._briefSangSoan(vanBan)}</div>
+      <textarea id="${idO}" style="display:none;">${this._escHtml(vanBan || '')}</textarea>
+      <div class="bf-kyhieu" id="bf-kyhieu-${idO}" style="display:none;"></div>`;
   },
 
-  /** Bật/tắt ô xem trước ngay dưới thanh công cụ. */
-  _xemTruocBrief(idO) {
+  /** Đặt lại nội dung cho cả ô soạn thảo lẫn ô ẩn. */
+  _datBriefSoan(idO, vanBan) {
     const o = document.getElementById(idO);
-    const hop = document.getElementById('bf-xem-' + idO);
-    if (!o || !hop) return;
+    const soan = document.getElementById(idO + '-soan');
+    if (o) o.value = vanBan || '';
+    if (soan) {
+      soan.innerHTML = this._briefSangSoan(vanBan);
+      soan.classList.toggle('bf-rong', !String(vanBan || '').trim());
+    }
+  },
+
+  /** Ô soạn thảo đổi -> dịch ngược ra ký hiệu, ghi vào ô ẩn. */
+  _dongBoBrief(idO) {
+    const o = document.getElementById(idO);
+    const soan = document.getElementById(idO + '-soan');
+    if (!o || !soan) return;
+    o.value = this._htmlSangBrief(soan);
+    soan.classList.toggle('bf-rong', !soan.textContent.trim());
+  },
+
+  /** Dán từ Word/web thì chỉ lấy chữ, bỏ hết màu mè và font lạ. */
+  _danBrief(ev, idO) {
+    ev.preventDefault();
+    const chu = (ev.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, chu);
+    this._dongBoBrief(idO);
+  },
+
+  /** Bấm nút định dạng. */
+  _dinhDangBrief(idO, lenh) {
+    const soan = document.getElementById(idO + '-soan');
+    if (!soan) return;
+    soan.focus();
+    // Bắt trình duyệt sinh thẻ <b>/<i> thay vì span kèm style —
+    // dịch ngược ra ký hiệu mới gọn và chắc.
+    try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+
+    switch (lenh) {
+      case 'dam':      document.execCommand('bold'); break;
+      case 'nghieng':  document.execCommand('italic'); break;
+      case 'tieude':   document.execCommand('formatBlock', false, '<h4>'); break;
+      case 'gachdau':  document.execCommand('insertUnorderedList'); break;
+      case 'danhso':   document.execCommand('insertOrderedList'); break;
+      case 'trichdan': document.execCommand('formatBlock', false, '<blockquote>'); break;
+      case 'xoa':
+        document.execCommand('removeFormat');
+        try {
+          if (document.queryCommandState('insertUnorderedList')) document.execCommand('insertUnorderedList');
+          if (document.queryCommandState('insertOrderedList'))   document.execCommand('insertOrderedList');
+        } catch (e) {}
+        document.execCommand('formatBlock', false, '<div>');
+        break;
+    }
+    this._dongBoBrief(idO);
+    this._capNhatNutBrief(idO);
+  },
+
+  /** Sáng nút nào đang có hiệu lực tại vị trí con trỏ. */
+  _capNhatNutBrief(idO) {
+    const bar = document.getElementById('bf-bar-' + idO);
+    if (!bar) return;
+    const trangThai = (lenh) => {
+      try {
+        if (lenh === 'dam')     return document.queryCommandState('bold');
+        if (lenh === 'nghieng') return document.queryCommandState('italic');
+        if (lenh === 'gachdau') return document.queryCommandState('insertUnorderedList');
+        if (lenh === 'danhso')  return document.queryCommandState('insertOrderedList');
+        if (lenh === 'tieude' || lenh === 'trichdan') {
+          const k = (document.queryCommandValue('formatBlock') || '').toLowerCase();
+          return lenh === 'tieude' ? /^h[1-6]$/.test(k) : k === 'blockquote';
+        }
+      } catch (e) {}
+      return false;
+    };
+    bar.querySelectorAll('.bf-btn[data-lenh]').forEach(b => {
+      if (b.dataset.lenh === 'xoa') return;
+      b.classList.toggle('bf-dang-bat', trangThai(b.dataset.lenh));
+    });
+  },
+
+  /** Bật/tắt ô xem đúng chuỗi ký hiệu sẽ lưu vào Sheets. */
+  _xemKyHieuBrief(idO) {
+    const soan = document.getElementById(idO + '-soan');
+    const hop  = document.getElementById('bf-kyhieu-' + idO);
+    if (!soan || !hop) return;
     const dangXem = hop.style.display !== 'none';
     if (dangXem) {
       hop.style.display = 'none';
-      o.style.display = '';
+      soan.style.display = '';
     } else {
-      hop.innerHTML = this._briefSangHtml(o.value) ||
-        '<span class="bf-trong">Chưa có nội dung</span>';
+      this._dongBoBrief(idO);
+      const v = document.getElementById(idO)?.value || '';
+      hop.textContent = v || '(chưa có nội dung)';
       hop.style.display = 'block';
-      o.style.display = 'none';
+      soan.style.display = 'none';
     }
     const nut = document.querySelector('#bf-bar-' + idO + ' .bf-xem');
-    if (nut) nut.textContent = dangXem ? 'Xem trước' : 'Quay lại gõ';
+    if (nut) nut.textContent = dangXem ? 'Xem ký hiệu' : 'Quay lại soạn';
+  },
+
+  /** Ký hiệu -> HTML cho Ô SOẠN THẢO (dùng thẻ thật để nút định dạng
+   *  của trình duyệt nhận ra: h4, ul, ol, blockquote). */
+  _briefSangSoan(text) {
+    if (!text) return '';
+    const esc = this._escHtml(String(text));
+    const trongDong = (s) => s
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+
+    let html = '', ul = false, ol = false;
+    const dongUl = (b) => { if (ul !== b) { html += b ? '<ul>' : '</ul>'; ul = b; } };
+    const dongOl = (b) => { if (ol !== b) { html += b ? '<ol>' : '</ol>'; ol = b; } };
+
+    esc.split('\n').forEach(raw => {
+      const l = raw.trim();
+      if (/^#{1,6}\s+/.test(l)) {
+        dongUl(false); dongOl(false);
+        html += `<h4>${trongDong(l.replace(/^#{1,6}\s+/, ''))}</h4>`;
+      } else if (/^[-*]\s+/.test(l)) {
+        dongOl(false); dongUl(true);
+        html += `<li>${trongDong(l.replace(/^[-*]\s+/, ''))}</li>`;
+      } else if (/^\d+[.)]\s+/.test(l)) {
+        dongUl(false); dongOl(true);
+        html += `<li>${trongDong(l.replace(/^\d+[.)]\s+/, ''))}</li>`;
+      } else if (/^&gt;\s?/.test(l)) {
+        dongUl(false); dongOl(false);
+        html += `<blockquote>${trongDong(l.replace(/^&gt;\s?/, ''))}</blockquote>`;
+      } else {
+        dongUl(false); dongOl(false);
+        html += `<div>${l === '' ? '<br>' : trongDong(l)}</div>`;
+      }
+    });
+    dongUl(false); dongOl(false);
+    return html;
+  },
+
+  /** HTML trong ô soạn thảo -> chuỗi ký hiệu để lưu vào Sheets. */
+  _htmlSangBrief(root) {
+    const dong = [];
+
+    const chuTrongDong = (node) => {
+      let s = '';
+      node.childNodes.forEach(n => {
+        if (n.nodeType === 3) { s += n.nodeValue.replace(/ /g, ' '); return; }
+        if (n.nodeType !== 1) return;
+        const t = n.tagName.toLowerCase();
+        if (t === 'br') { s += '\n'; return; }
+        const trong = chuTrongDong(n);
+        if (!trong.trim()) { s += trong; return; }
+        const dam = (t === 'b' || t === 'strong');
+        const ngh = (t === 'i' || t === 'em');
+        if (dam)      s += '**' + trong.trim() + '**' + (/\s$/.test(trong) ? ' ' : '');
+        else if (ngh) s += '*'  + trong.trim() + '*'  + (/\s$/.test(trong) ? ' ' : '');
+        else s += trong;
+      });
+      return s;
+    };
+
+    const themNhieuDong = (s, tienTo) => {
+      String(s).split('\n').forEach(l => dong.push(tienTo + l.trim()));
+    };
+
+    const duyet = (node) => {
+      node.childNodes.forEach(n => {
+        if (n.nodeType === 3) {
+          const t = n.nodeValue.replace(/ /g, ' ');
+          if (t.trim()) dong.push(t.trim());
+          return;
+        }
+        if (n.nodeType !== 1) return;
+        const tag = n.tagName.toLowerCase();
+
+        if (tag === 'ul') {
+          n.querySelectorAll(':scope > li').forEach(li => dong.push('- ' + chuTrongDong(li).trim()));
+          return;
+        }
+        if (tag === 'ol') {
+          let i = 0;
+          n.querySelectorAll(':scope > li').forEach(li => dong.push((++i) + '. ' + chuTrongDong(li).trim()));
+          return;
+        }
+        if (tag === 'blockquote') { themNhieuDong(chuTrongDong(n), '> '); return; }
+        if (/^h[1-6]$/.test(tag)) { dong.push('## ' + chuTrongDong(n).trim()); return; }
+        if (tag === 'br') { dong.push(''); return; }
+
+        if (tag === 'div' || tag === 'p') {
+          // Khối lồng nhau (trình duyệt hay bọc <div> quanh <ul>)
+          if (n.querySelector('ul,ol,blockquote,h1,h2,h3,h4,h5,h6,div,p')) { duyet(n); return; }
+          themNhieuDong(chuTrongDong(n), '');
+          return;
+        }
+        const s = chuTrongDong(n);
+        if (s.trim()) themNhieuDong(s, '');
+      });
+    };
+
+    duyet(root);
+    return dong.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
   },
 
   /**
