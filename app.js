@@ -122,6 +122,13 @@ const App = {
 
     this.currentPage = page;
 
+    // Man Kanban dung giao dien NEN TOI. Gan class de khoi CSS
+    // "KANBAN — GIAO DIEN NEN TOI" o cuoi styles.css co hieu luc;
+    // sang man khac thi tu go ra nen cac man kia khong bi anh huong.
+    // Muon tra ve nen sang: xoa 2 dong duoi + xoa khoi CSS do.
+    const khungChinh = document.getElementById('main-content');
+    if (khungChinh) khungChinh.classList.toggle('kanban-dark', page === 'kanban');
+
     document.querySelectorAll('.nav-item').forEach(el => {
       el.classList.toggle('active', el.dataset.page === page);
     });
@@ -5389,15 +5396,16 @@ const App = {
       box.id = 'kb-thong-bao-moi';
       box.style.cssText = 'position:fixed; left:50%; bottom:24px; transform:translateX(-50%);' +
         'z-index:900; display:flex; align-items:center; gap:12px; max-width:calc(100vw - 24px);' +
-        'padding:10px 12px 10px 16px; border-radius:999px; background:#3F3428; color:#F5EFE6;' +
+        'padding:10px 12px 10px 16px; border-radius:999px; background:#151518; color:#FFFFFF;' +
+        'border:1px solid rgba(216,196,164,0.35);' +
         'box-shadow:0 6px 20px rgba(0,0,0,0.25); font-size:13px; font-weight:600;';
       document.body.appendChild(box);
       box.innerHTML =
         '<span id="kb-thong-bao-chu" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>' +
         '<button type="button" onclick="App._capNhatKanbanNgay()" style="flex-shrink:0; border:none; cursor:pointer;' +
-        'background:#C8A97E; color:#2B2318; font-weight:700; font-size:13px; padding:7px 14px; border-radius:999px;">Cập nhật</button>' +
+        'background:#E2D2B6; color:#2A2420; font-weight:700; font-size:13px; padding:7px 14px; border-radius:999px;">Cập nhật</button>' +
         '<button type="button" aria-label="Bỏ qua" onclick="App._boQuaThongBaoKanban()" style="flex-shrink:0; border:none;' +
-        'cursor:pointer; background:transparent; color:#C9BEB0; font-size:16px; line-height:1; padding:4px 6px;">✕</button>';
+        'cursor:pointer; background:transparent; color:rgba(255,255,255,0.55); font-size:16px; line-height:1; padding:4px 6px;">✕</button>';
     }
     const chu = document.getElementById('kb-thong-bao-chu');
     if (chu) chu.textContent = soThayDoi > 0
@@ -5478,7 +5486,7 @@ const App = {
           <div class="kb-stats">
             <span class="kb-stat-badge">${totalActive} đơn đang chạy</span>
             ${this.session?.role === 'admin' ? `
-              <button class="btn btn-ghost btn-sm" onclick="App._openDonDaAnModal()" style="color:#c0392b;">
+              <button class="btn btn-ghost btn-sm" onclick="App._openDonDaAnModal()" style="color:#E9A9A2;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 Thùng rác
               </button>
@@ -5561,29 +5569,30 @@ const App = {
     const isThuDu = soPhaiThu > 0 && daThucThu >= soPhaiThu;
 
     let dynamicStatus = 'Đang chạy';
-    let statusBg = '#EDE6DA';
-    let statusColor = '#876B4D';
+    // The Kanban dung nen beige sang -> huy hieu dung mau chu dam
+    let statusBg = '#E0D3BA';
+    let statusColor = '#4A3E31';
     if (isHuy) {
       dynamicStatus = 'Đã hủy';
-      statusBg = '#FCE9E9';
-      statusColor = '#B4453C';
+      statusBg = '#FBDDDC';
+      statusColor = '#A93B33';
     } else if (d.cot_kanban === 'Hoàn thành đơn' && isThuDu) {
       dynamicStatus = 'Hoàn thành';
-      statusBg = '#E6F4EA';
-      statusColor = '#3B7A57';
+      statusBg = '#D9F2DE';
+      statusColor = '#2E6B45';
     }
 
     // Label strips at top of card (poster, banner...)
     const labelsHtml = labels.length > 0
       ? labels.map(l => {
-          const st = App._getLabelStyle(l.nhan);
+          const st = App._getLabelStyle(l.nhan);   // ban mau sang — the co nen beige
           return `<span class="kb-label-pill" style="background:${st.bg}; color:${st.color}; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px;" title="${this._escHtml(l.nhan)}">${this._escHtml(l.nhan)}</span>`;
         }).join('')
       : '';
 
     const cancelLabel = `
-      <span style="background:${statusBg}; color:${statusColor}; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px;">${dynamicStatus}</span>
-      ${(isSaleAdmin && isThuDu) ? `<span style="background:#EDE6DA; color:#876B4D; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px;" title="Đã thu đủ tiền">Đã thu đủ</span>` : ''}
+      <span class="kb-c-trangthai" style="background:${statusBg}; color:${statusColor};">${dynamicStatus}</span>
+      ${(isSaleAdmin && isThuDu) ? `<span class="kb-tag kb-tag-thudu" title="Đã thu đủ tiền">Đã thu đủ</span>` : ''}
     `;
 
     const deadlineHtml = d.ngay_het_han
@@ -5598,7 +5607,7 @@ const App = {
            ${this._escHtml(designers)}
          </div>` : '';
 
-    const maKhText = (!isDesigner && d.ma_kh) ? `<span style="color:var(--clr-text-muted); font-size:12px;">${this._escHtml(d.ma_kh)}</span>` : '';
+    const maKhText = (!isDesigner && d.ma_kh) ? `<span class="kb-c-makh">${this._escHtml(d.ma_kh)}</span>` : '';
 
     const designersList = this._kanbanDesignerMap?.[d.ma_don] || [];
     const avatarsHtml = designersList.length > 0 ? `<div style="display:flex; gap:4px; margin-left:auto; align-items:center;">` + designersList.map(name => {
@@ -5624,26 +5633,27 @@ const App = {
            ondragend="App._onDragEnd(event)"
            onclick="App._openCardDetail('${this._escHtml(d.ma_don)}')"
            style="${cardStyle}">
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <!-- ID & KH -->
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="background:#F5EFE6; color:#2A2420; font-weight:700; padding:4px 10px; border-radius:12px; font-size:12px;">${this._escHtml(d.ma_don)}</span>
-            ${d.diem_don !== undefined && d.diem_don !== '' ? `<span style="background:#9C7E5E; color:#FFF; font-weight:700; padding:4px 10px; border-radius:999px; font-size:11px;">Điểm: ${this._escHtml(d.diem_don)}</span>` : ''}
-            ${maKhText}
-          </div>
-          <!-- Tags -->
-          <div style="display:flex; flex-wrap:wrap; gap:4px;">
-            ${labelsHtml}
-            ${cancelLabel}
-            ${d.item ? `<span class="kb-tag kb-tag-item">${this._escHtml(d.item)}</span>` : ''}
-          </div>
-          <!-- Khách hàng -->
-          <div class="kb-card-name" style="font-size:14px;">${this._escHtml(d.ten_khach || '')}</div>
-          <!-- Footer -->
-          <div class="kb-card-footer" style="display:flex; align-items:center; justify-content:space-between; margin-top:2px;">
-            ${deadlineHtml}
-            ${avatarsHtml}
-          </div>
+        <!-- Dòng phụ: mã đơn · mã khách · điểm -->
+        <div class="kb-c-meta">
+          <span class="kb-c-madon">${this._escHtml(d.ma_don)}</span>
+          ${maKhText}
+          ${d.diem_don !== undefined && d.diem_don !== '' ? `<span class="kb-c-diem">${this._escHtml(d.diem_don)} điểm</span>` : ''}
+        </div>
+
+        <!-- Tiêu đề thẻ: tên khách hàng -->
+        <div class="kb-c-title">${this._escHtml(d.ten_khach || '—')}</div>
+
+        <!-- Nhãn -->
+        <div class="kb-c-tags">
+          ${cancelLabel}
+          ${labelsHtml}
+          ${d.item ? `<span class="kb-tag kb-tag-item">${this._escHtml(d.item)}</span>` : ''}
+        </div>
+
+        <!-- Chân thẻ: hạn giao + người phụ trách -->
+        <div class="kb-c-foot">
+          ${deadlineHtml}
+          ${avatarsHtml}
         </div>
       </div>`;
   },
