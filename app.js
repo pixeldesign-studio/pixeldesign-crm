@@ -6681,6 +6681,7 @@ const App = {
 
     // ── File links ────────────────────────────────────────────
     const linkLines = (don.link_anh || '').split('\n').filter(Boolean);
+    this._fileDinhKem = [];   // dung cho o xem anh phong to
     const linksHtml = linkLines.length > 0
       ? linkLines.map((url, i) => {
           const parts = url.split('|');
@@ -6690,6 +6691,9 @@ const App = {
              name = fileUrl.match(/\/([^/]+)\/(view|preview|download)?$/)?.[1] || `File ${i+1}`;
           }
           const isImg = /\.(jpg|jpeg|png|gif|webp|svg)/i.test(fileUrl) || /\.(jpg|jpeg|png|gif|webp|svg)/i.test(name);
+          this._fileDinhKem.push({ url: fileUrl, ten: name, anh: isImg });
+          // thu tu rieng trong danh sach CHI GOM ANH — de bam mui ten qua lai
+          const thuTuAnh = this._fileDinhKem.filter(f => f.anh).length - 1;
           
           let editBtnHtml = '';
           if (isSaleAdmin && parts.length > 1) {
@@ -6701,8 +6705,9 @@ const App = {
           const viewHtml = `
             <div id="edit-file-view-${i}" style="display:flex; align-items:center; gap:4px; width:100%; margin-bottom:4px;">
               ${isImg
-                ? `<a href="${this._escHtml(fileUrl)}" target="_blank" class="kb-detail-file kb-detail-img-link" style="flex:1; margin:0;">
-                     <img src="${this._escHtml(fileUrl.replace('view','preview'))}" alt="${i+1}" onerror="this.style.display='none'"/>
+                ? `<a href="${this._escHtml(fileUrl)}" class="kb-detail-file kb-detail-img-link" style="flex:1; margin:0;"
+                        onclick="App._moAnhLon(${thuTuAnh}); return false;" title="Bấm để xem ảnh lớn">
+                     <img src="${this._escHtml(this._anhXemDuoc(fileUrl, 400))}" alt="${i+1}" loading="lazy" onerror="this.style.display='none'"/>
                      <span>${this._escHtml(name)}</span>
                    </a>`
                 : `<a href="${this._escHtml(fileUrl)}" target="_blank" class="kb-detail-file" style="flex:1; margin:0;">
@@ -7347,6 +7352,117 @@ const App = {
   // Thanh công cụ chỉ chèn ký hiệu; hàm _briefSangHtml lo hiển thị.
   // ════════════════════════════════════════════════════════════
 
+
+  // ════════════════════════════════════════════════════════════
+  // XEM ẢNH ĐÍNH KÈM NGAY TẠI CHỖ            (thêm 30/08/2026)
+  // ────────────────────────────────────────────────────────────
+  // Bấm ảnh trong popup -> ảnh mở phủ toàn màn hình, không nhảy
+  // sang tab mới. Bấm ra ngoài / nút ✕ / phím Esc thì đóng lại,
+  // popup đơn hàng bên dưới vẫn còn nguyên.
+  // ════════════════════════════════════════════════════════════
+
+  /** Lấy id file Google Drive từ các dạng link thường gặp. */
+  _idFileDrive(url) {
+    if (!url) return '';
+    const s = String(url);
+    const m = s.match(/\/file\/d\/([-\w]{10,})/)
+           || s.match(/[?&]id=([-\w]{10,})/)
+           || s.match(/\/d\/([-\w]{10,})/);
+    return m ? m[1] : '';
+  },
+
+  /**
+   * Đường dẫn ảnh mà thẻ <img> hiển thị được.
+   * LƯU Ý: link Drive dạng /view hay /preview trả về TRANG WEB chứ
+   * không phải file ảnh — nhét vào <img> là hỏng. Phải đổi sang
+   * dạng thumbnail kèm chiều rộng mong muốn.
+   */
+  _anhXemDuoc(url, rong) {
+    const id = this._idFileDrive(url);
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${rong}` : url;
+  },
+
+  /** Mở ảnh thứ i trong danh sách file đính kèm của popup đang mở. */
+  _moAnhLon(i) {
+    const ds = (this._fileDinhKem || []).filter(f => f.anh);
+    if (!ds.length) return;
+    this._anhDangXem = Math.max(0, Math.min(i, ds.length - 1));
+
+    let lop = document.getElementById('lop-xem-anh');
+    if (!lop) {
+      lop = document.createElement('div');
+      lop.id = 'lop-xem-anh';
+      lop.className = 'xa-lop';
+      lop.innerHTML =
+        '<button type="button" class="xa-dong" title="Đóng">&#10005;</button>' +
+        '<button type="button" class="xa-truoc" title="Ảnh trước">&#10094;</button>' +
+        '<button type="button" class="xa-sau"   title="Ảnh sau">&#10095;</button>' +
+        '<div class="xa-khung">' +
+          '<img class="xa-anh" alt="">' +
+          '<div class="xa-duoi"><span class="xa-ten"></span>' +
+          '<a class="xa-mo" target="_blank" rel="noopener noreferrer">Mở trong Drive</a>' +
+          '<span class="xa-dem"></span></div>' +
+        '</div>';
+      document.body.appendChild(lop);
+
+      // Bấm ra ngoài vùng ảnh -> đóng
+      lop.addEventListener('click', (e) => {
+        if (!e.target.closest('.xa-khung') && !e.target.closest('.xa-truoc') && !e.target.closest('.xa-sau')) {
+          this._dongAnhLon();
+        }
+      });
+      lop.querySelector('.xa-dong').addEventListener('click', () => this._dongAnhLon());
+      lop.querySelector('.xa-truoc').addEventListener('click', () => this._doiAnhLon(-1));
+      lop.querySelector('.xa-sau').addEventListener('click',  () => this._doiAnhLon(1));
+
+      this._phimAnhLon = (e) => {
+        if (e.key === 'Escape')     { e.stopPropagation(); this._dongAnhLon(); }
+        if (e.key === 'ArrowLeft')  this._doiAnhLon(-1);
+        if (e.key === 'ArrowRight') this._doiAnhLon(1);
+      };
+      document.addEventListener('keydown', this._phimAnhLon, true);
+      requestAnimationFrame(() => lop.classList.add('xa-hien'));
+    }
+    this._veAnhLon();
+  },
+
+  _doiAnhLon(buoc) {
+    const ds = (this._fileDinhKem || []).filter(f => f.anh);
+    if (ds.length < 2) return;
+    this._anhDangXem = (this._anhDangXem + buoc + ds.length) % ds.length;
+    this._veAnhLon();
+  },
+
+  _veAnhLon() {
+    const lop = document.getElementById('lop-xem-anh');
+    const ds = (this._fileDinhKem || []).filter(f => f.anh);
+    if (!lop || !ds.length) return;
+    const f = ds[this._anhDangXem];
+    const img = lop.querySelector('.xa-anh');
+    img.classList.remove('xa-loi');
+    img.src = this._anhXemDuoc(f.url, 1600);
+    img.alt = f.ten || '';
+    img.onerror = () => img.classList.add('xa-loi');
+    lop.querySelector('.xa-ten').textContent = f.ten || '';
+    lop.querySelector('.xa-mo').href = f.url;
+    lop.querySelector('.xa-dem').textContent =
+      ds.length > 1 ? `${this._anhDangXem + 1}/${ds.length}` : '';
+    const nhieu = ds.length > 1 ? '' : 'none';
+    lop.querySelector('.xa-truoc').style.display = nhieu;
+    lop.querySelector('.xa-sau').style.display   = nhieu;
+  },
+
+  _dongAnhLon() {
+    const lop = document.getElementById('lop-xem-anh');
+    if (!lop) return;
+    lop.classList.remove('xa-hien');
+    if (this._phimAnhLon) {
+      document.removeEventListener('keydown', this._phimAnhLon, true);
+      this._phimAnhLon = null;
+    }
+    setTimeout(() => lop.remove(), 180);
+  },
+
   /** Dựng thanh công cụ cho một ô nhập brief. idO = id của textarea. */
   _thanhCongCuBrief(idO) {
     const n = (lenh, nhan, tip) =>
@@ -7501,6 +7617,7 @@ const App = {
   },
 
   _closeCardDetail() {
+    this._dongAnhLon();   // dong o xem anh neu dang mo
     const overlay = document.getElementById('kb-detail-overlay');
     if (!overlay) return;
     overlay.classList.remove('kb-overlay-visible');
