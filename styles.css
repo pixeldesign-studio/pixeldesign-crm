@@ -2486,3 +2486,117 @@ details[open] .kb-collapse-icon { transform: rotate(180deg); }
   background: #FFFFFF;
   color: #2A2420;
 }
+
+
+/* ════════════════════════════════════════════════════════════
+   BRIEF CÓ ĐỊNH DẠNG — thanh công cụ, ô nhập, ô xem trước
+   Dùng chung cho màn Lên đơn và ô sửa brief trong popup.
+   Dữ liệu vẫn là văn bản thuần; đây chỉ là lớp hiển thị.
+   ════════════════════════════════════════════════════════════ */
+
+.bf-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  background: var(--clr-bg-warm, #F5F1EB);
+  border: 1px solid var(--clr-border, #EDE6DA);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+.bf-btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--clr-text-sub, #6B5E52);
+  transition: background 0.14s, color 0.14s;
+}
+.bf-btn:hover  { background: rgba(156, 126, 94, 0.13); color: var(--clr-accent-dark, #876B4D); }
+.bf-btn:active { background: rgba(156, 126, 94, 0.22); }
+.bf-btn b { font-weight: 800; }
+.bf-btn i { font-family: Georgia, serif; }
+
+.bf-vach {
+  width: 1px;
+  height: 17px;
+  margin: 0 4px;
+  background: var(--clr-border, #EDE6DA);
+  flex-shrink: 0;
+}
+
+.bf-xem {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  color: var(--clr-accent, #9C7E5E);
+}
+.bf-xem:hover { background: rgba(156, 126, 94, 0.13); }
+
+/* Ô nhập nối liền với thanh công cụ, cao hơn hẳn vì brief thường dài */
+.bf-o {
+  min-height: 280px !important;
+  border-radius: 0 0 10px 10px !important;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+/* Ô xem trước — thay chỗ ô nhập, cùng khung */
+.bf-xem-hop {
+  min-height: 280px;
+  padding: 14px 16px;
+  border: 1px solid var(--clr-border, #EDE6DA);
+  border-radius: 0 0 10px 10px;
+  background: var(--clr-card, #FFFFFF);
+  font-size: var(--font-size-sm, 14px);
+  line-height: 1.65;
+  color: var(--clr-text, #2A2420);
+  overflow-y: auto;
+}
+.bf-trong { color: var(--clr-text-muted, #9E8E82); font-style: italic; }
+
+/* ─── Cách hiển thị nội dung brief đã định dạng ─────────────── */
+.bf-h {
+  font-weight: 800;
+  font-size: 1.04em;
+  color: var(--clr-accent-dark, #876B4D);
+  margin: 14px 0 6px;
+  letter-spacing: 0.01em;
+}
+.bf-h:first-child { margin-top: 0; }
+.bf-p    { margin: 0 0 4px; }
+.bf-cach { height: 9px; }
+.bf-ul, .bf-ol { margin: 4px 0 8px; padding-left: 22px; }
+.bf-ul li, .bf-ol li { margin-bottom: 3px; }
+.bf-ul { list-style: disc; }
+.bf-ol { list-style: decimal; }
+.bf-quote {
+  margin: 8px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--clr-accent-light, #CBB799);
+  background: rgba(156, 126, 94, 0.07);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+}
+.bf-link {
+  color: var(--clr-accent, #9C7E5E);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.kb-brief-display strong { font-weight: 800; }
+
+/* Trong popup, ô xem trước và thanh công cụ theo bộ màu của popup */
+.kb-overlay.kb-kanban .bf-bar     { background: #F2EDE4; border-color: rgba(42, 36, 32, 0.13); }
+.kb-overlay.kb-kanban .bf-xem-hop { background: #FAF7F1; border-color: rgba(42, 36, 32, 0.13); }
