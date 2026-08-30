@@ -1351,7 +1351,9 @@ const App = {
       </div>
       <div class="form-group full-width">
         <label class="form-label" for="f-brief">Brief mô tả</label>
-        <textarea class="form-textarea" id="f-brief" placeholder="Mô tả yêu cầu thiết kế: phong cách, màu sắc, kích thước, tham khảo..." rows="4"></textarea>
+        ${this._thanhCongCuBrief('f-brief')}
+        <textarea class="form-textarea bf-o" id="f-brief" placeholder="Mô tả yêu cầu thiết kế: phong cách, màu sắc, kích thước, tham khảo...&#10;&#10;Bôi đen chữ rồi bấm nút phía trên để định dạng."></textarea>
+        <div class="bf-xem-hop" id="bf-xem-f-brief" style="display:none;"></div>
       </div>
       <div class="form-group">
         <label class="form-label" for="f-sale">Sale phụ trách</label>
@@ -6896,7 +6898,7 @@ const App = {
     }
 
     // ── Brief with clickable links ──────────────────────────
-    const briefDisplay = this._linkifyText(don.brief || '');
+    const briefDisplay = this._briefSangHtml(don.brief || '');
 
     // ── Contact info (sale/admin only) ──────────────────────
     const kh = this._kanbanKhachHangMap?.[don.ma_kh] || don;
@@ -7219,11 +7221,13 @@ const App = {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                   BRIEF MÔ TẢ
                 </div>
-                ${!isDesigner ? `<button class="btn btn-ghost btn-sm" style="padding:4px 12px; height:auto; min-height:0; border-radius:12px; background:rgba(156,126,94,0.1); color:#9C7E5E; font-weight:600;" onclick="this.parentElement.nextElementSibling.style.display='none'; this.parentElement.parentElement.querySelector('#det-brief').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief-upload-wrapper').style.display='block'; this.style.display='none';">Sửa</button>` : ''}
+                ${!isDesigner ? `<button class="btn btn-ghost btn-sm" style="padding:4px 12px; height:auto; min-height:0; border-radius:12px; background:rgba(156,126,94,0.1); color:#9C7E5E; font-weight:600;" onclick="this.parentElement.nextElementSibling.style.display='none'; this.parentElement.parentElement.querySelector('#det-brief-bar-wrap').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief').style.display='block'; this.parentElement.parentElement.querySelector('#det-brief-upload-wrapper').style.display='block'; this.style.display='none';">Sửa</button>` : ''}
               </div>
-              <div class="kb-brief-display" style="white-space:pre-wrap; font-size:14px; line-height:1.6; color:#2A2420; background:#FFFFFF; border:1px solid #EDE4D6; border-radius:10px; padding:16px;">${briefDisplay}</div>
+              <div class="kb-brief-display" style="font-size:14px; line-height:1.6; color:#2A2420; background:#FFFFFF; border:1px solid #EDE4D6; border-radius:10px; padding:16px;">${briefDisplay}</div>
               ${!isDesigner ? `
-                <textarea class="form-textarea" id="det-brief" rows="6" style="font-size:var(--font-size-sm); display:none; border-radius:10px; border-color:#EDE4D6;">${this._escHtml(don.brief || '')}</textarea>
+                <div id="det-brief-bar-wrap" style="display:none;">${this._thanhCongCuBrief('det-brief')}</div>
+                <textarea class="form-textarea bf-o" id="det-brief" style="font-size:var(--font-size-sm); display:none; border-radius:10px; border-color:#EDE4D6;">${this._escHtml(don.brief || '')}</textarea>
+                <div class="bf-xem-hop" id="bf-xem-det-brief" style="display:none;"></div>
                 <div id="det-brief-upload-wrapper" style="display:none; margin-top: 8px;">
                   <label class="btn btn-outline btn-sm" for="det-file-upload" style="cursor:pointer; display:inline-flex; width:auto; padding:4px 12px; margin-bottom: 4px; border-radius:8px; border-color:#EDE4D6; color:#9C7E5E;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -7326,6 +7330,165 @@ const App = {
       <label class="kb-detail-label">${label}</label>
       <input class="form-input" id="${id}" value="${this._escHtml(value || '')}" style="font-size:var(--font-size-sm);"/>
     </div>`;
+  },
+
+
+  // ════════════════════════════════════════════════════════════
+  // BRIEF CÓ ĐỊNH DẠNG                        (thêm 30/08/2026)
+  // ────────────────────────────────────────────────────────────
+  // Ô brief vẫn lưu VĂN BẢN THUẦN vào Google Sheets. Định dạng
+  // được ghi bằng ký hiệu đơn giản, giống cách gõ trong Zalo:
+  //     ## Tiêu đề mục
+  //     **chữ đậm**        *chữ nghiêng*
+  //     - gạch đầu dòng    1. danh sách đánh số
+  //     > trích dẫn
+  // Nhờ vậy mở Sheet ra vẫn đọc hiểu, copy sang Zalo vẫn rõ nghĩa,
+  // và sau này đổi công cụ thì dữ liệu vẫn dùng lại được.
+  // Thanh công cụ chỉ chèn ký hiệu; hàm _briefSangHtml lo hiển thị.
+  // ════════════════════════════════════════════════════════════
+
+  /** Dựng thanh công cụ cho một ô nhập brief. idO = id của textarea. */
+  _thanhCongCuBrief(idO) {
+    const n = (lenh, nhan, tip) =>
+      `<button type="button" class="bf-btn" title="${tip}" tabindex="-1"` +
+      ` onclick="App._dinhDangBrief('${idO}','${lenh}')">${nhan}</button>`;
+    return `
+      <div class="bf-bar" id="bf-bar-${idO}">
+        ${n('dam', '<b>B</b>', 'Chữ đậm')}
+        ${n('nghieng', '<i>I</i>', 'Chữ nghiêng')}
+        ${n('tieude', 'H', 'Tiêu đề mục')}
+        <span class="bf-vach"></span>
+        ${n('gachdau', '&bull;', 'Gạch đầu dòng')}
+        ${n('danhso', '1.', 'Danh sách đánh số')}
+        ${n('trichdan', '&ldquo;', 'Trích dẫn')}
+        <span class="bf-vach"></span>
+        ${n('xoa', '&#10005;', 'Xoá định dạng')}
+        <button type="button" class="bf-xem" tabindex="-1"
+                onclick="App._xemTruocBrief('${idO}')">Xem trước</button>
+      </div>`;
+  },
+
+  /** Chèn / gỡ ký hiệu định dạng vào ô nhập. */
+  _dinhDangBrief(idO, lenh) {
+    const o = document.getElementById(idO);
+    if (!o) return;
+    // Đang ở chế độ xem trước thì quay lại ô gõ trước đã
+    const hopXem = document.getElementById('bf-xem-' + idO);
+    if (hopXem && hopXem.style.display !== 'none') this._xemTruocBrief(idO);
+
+    const val = o.value;
+    const dau = o.selectionStart, cuoi = o.selectionEnd;
+    const BO_DAU_DONG = /^(#{1,6}\s+|[-*]\s+|>\s?|\d+[.)]\s+)/;
+
+    // Bọc hai đầu vùng đang chọn (đậm / nghiêng).
+    // Đẩy khoảng trắng thừa ra NGOÀI cặp ký hiệu — bôi đen bằng chuột
+    // hay dính thêm dấu cách ở cuối, để nguyên sẽ ra "**chữ **" nhìn lệch.
+    const boc = (k) => {
+      let d = dau, c = cuoi;
+      while (d < c && /\s/.test(val[d]))     d++;
+      while (c > d && /\s/.test(val[c - 1])) c--;
+      const chon = val.slice(d, c) || 'chữ';
+      const moi = k + chon + k;
+      o.value = val.slice(0, d) + moi + val.slice(c);
+      o.setSelectionRange(d + k.length, d + k.length + chon.length);
+    };
+
+    // Thêm ký hiệu vào ĐẦU MỖI DÒNG trong vùng chọn
+    const theoDong = (fn) => {
+      let d = val.lastIndexOf('\n', dau - 1) + 1;
+      let c = val.indexOf('\n', cuoi);
+      if (c === -1) c = val.length;
+      const ketQua = fn(val.slice(d, c).split('\n')).join('\n');
+      o.value = val.slice(0, d) + ketQua + val.slice(c);
+      o.setSelectionRange(d, d + ketQua.length);
+    };
+    const sach = (l) => l.replace(BO_DAU_DONG, '');
+
+    switch (lenh) {
+      case 'dam':      boc('**'); break;
+      case 'nghieng':  boc('*');  break;
+      case 'tieude':   theoDong(ds => ds.map(l => sach(l).trim() ? '## ' + sach(l) : l)); break;
+      case 'gachdau':  theoDong(ds => ds.map(l => sach(l).trim() ? '- '  + sach(l) : l)); break;
+      case 'trichdan': theoDong(ds => ds.map(l => sach(l).trim() ? '> '  + sach(l) : l)); break;
+      case 'danhso':
+        theoDong(ds => { let i = 0; return ds.map(l => {
+          const s = sach(l);
+          return s.trim() ? (++i) + '. ' + s : l;
+        }); });
+        break;
+      case 'xoa':
+        theoDong(ds => ds.map(l => sach(l).replace(/\*+/g, '')));
+        break;
+    }
+    o.focus();
+    o.dispatchEvent(new Event('input', { bubbles: true }));
+  },
+
+  /** Bật/tắt ô xem trước ngay dưới thanh công cụ. */
+  _xemTruocBrief(idO) {
+    const o = document.getElementById(idO);
+    const hop = document.getElementById('bf-xem-' + idO);
+    if (!o || !hop) return;
+    const dangXem = hop.style.display !== 'none';
+    if (dangXem) {
+      hop.style.display = 'none';
+      o.style.display = '';
+    } else {
+      hop.innerHTML = this._briefSangHtml(o.value) ||
+        '<span class="bf-trong">Chưa có nội dung</span>';
+      hop.style.display = 'block';
+      o.style.display = 'none';
+    }
+    const nut = document.querySelector('#bf-bar-' + idO + ' .bf-xem');
+    if (nut) nut.textContent = dangXem ? 'Xem trước' : 'Quay lại gõ';
+  },
+
+  /**
+   * Đổi brief (văn bản thuần có ký hiệu) thành HTML để hiển thị.
+   * LƯU Ý: escape TRƯỚC rồi mới dựng thẻ, nên nội dung người dùng
+   * gõ vào không thể chèn mã vào trang. Vì đã escape nên dấu ">"
+   * của dòng trích dẫn lúc này là "&gt;" — regex phải khớp theo đó.
+   */
+  _briefSangHtml(text) {
+    if (!text) return '';
+    const esc = this._escHtml(String(text));
+
+    const trongDong = (s) => s
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      .replace(/(https?:\/\/[^\s<]+)/g, u =>
+        `<a href="${u}" target="_blank" rel="noopener noreferrer" class="bf-link">${u}</a>`);
+
+    let html = '', ul = false, ol = false, td = false;
+    const dongUl = (b) => { if (ul !== b) { html += b ? '<ul class="bf-ul">' : '</ul>'; ul = b; } };
+    const dongOl = (b) => { if (ol !== b) { html += b ? '<ol class="bf-ol">' : '</ol>'; ol = b; } };
+    const dongTd = (b) => { if (td !== b) { html += b ? '<div class="bf-quote">' : '</div>'; td = b; } };
+    const dongHet = () => { dongUl(false); dongOl(false); dongTd(false); };
+
+    esc.split('\n').forEach(raw => {
+      const l = raw.trim();
+      if (/^#{1,6}\s+/.test(l)) {
+        dongHet();
+        html += `<div class="bf-h">${trongDong(l.replace(/^#{1,6}\s+/, ''))}</div>`;
+      } else if (/^[-*]\s+/.test(l)) {
+        dongOl(false); dongTd(false); dongUl(true);
+        html += `<li>${trongDong(l.replace(/^[-*]\s+/, ''))}</li>`;
+      } else if (/^\d+[.)]\s+/.test(l)) {
+        dongUl(false); dongTd(false); dongOl(true);
+        html += `<li>${trongDong(l.replace(/^\d+[.)]\s+/, ''))}</li>`;
+      } else if (/^&gt;\s?/.test(l)) {
+        dongUl(false); dongOl(false); dongTd(true);
+        html += `<div>${trongDong(l.replace(/^&gt;\s?/, ''))}</div>`;
+      } else if (l === '') {
+        dongHet();
+        html += '<div class="bf-cach"></div>';
+      } else {
+        dongHet();
+        html += `<div class="bf-p">${trongDong(l)}</div>`;
+      }
+    });
+    dongHet();
+    return html;
   },
 
   _linkifyText(text) {
