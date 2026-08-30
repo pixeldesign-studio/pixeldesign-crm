@@ -2446,7 +2446,7 @@ const App = {
 
     const overlay = document.createElement('div');
     overlay.id = 'kh-detail-overlay';
-    overlay.className = 'kb-overlay';
+    overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     overlay.innerHTML = `
       <div class="kb-detail-modal" style="max-width: 800px;">
         <div class="kb-detail-header">
@@ -6023,7 +6023,7 @@ const App = {
 
     const overlay = document.createElement('div');
     overlay.id = 'chot-diem-overlay';
-    overlay.className = 'kb-overlay';
+    overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     overlay.innerHTML = `
       <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
         <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
@@ -6270,7 +6270,7 @@ const App = {
 
       const overlay = document.createElement('div');
       overlay.id = 'chot-luong-overlay';
-      overlay.className = 'kb-overlay';
+      overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
       overlay.innerHTML = `
         <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
           <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
@@ -6378,7 +6378,7 @@ const App = {
 
     const overlay = document.createElement('div');
     overlay.id = 'chot-luong-overlay';
-    overlay.className = 'kb-overlay';
+    overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     overlay.innerHTML = `
       <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
         <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
@@ -7149,7 +7149,7 @@ const App = {
 
     const overlay = document.createElement('div');
     overlay.id = 'kb-detail-overlay';
-    overlay.className = 'kb-overlay';
+    overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
 
     // ── Comments ────────────────────────────────────────────
     const donComments = (this._commentList || []).filter(c => c.ma_don === maDon);
@@ -7181,7 +7181,7 @@ const App = {
     `;
 
     const hideDonBtnHtml = (this.session?.role === 'admin' && don.da_an !== 'yes')
-      ? `<button type="button" class="btn btn-ghost" style="color:#e74c3c; padding:8px 16px;" onclick="App._confirmAndHideOrder('${this._escHtml(maDon)}')">Ẩn đơn</button>`
+      ? `<button type="button" class="btn btn-ghost" style="color:#C0392B; padding:8px 16px;" onclick="App._confirmAndHideOrder('${this._escHtml(maDon)}')">Ẩn đơn</button>`
       : '';
 
     const deleteDonBtnHtml = (this.session?.role === 'admin')
@@ -7485,7 +7485,7 @@ const App = {
 
     const overlay = document.createElement('div');
     overlay.id = 'kb-group-overlay';
-    overlay.className = 'kb-overlay';
+    overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     
     overlay.innerHTML = `
       <div class="kb-detail-modal" style="max-width: 700px;">
@@ -7612,7 +7612,7 @@ const App = {
 
     modal = document.createElement('div');
     modal.id = 'da-an-modal';
-    modal.className = 'kb-overlay'; // Để animation chạy
+    modal.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : ''); // Để animation chạy
     modal.style.zIndex = '9999';
     document.body.appendChild(modal);
 
@@ -8696,7 +8696,7 @@ const App = {
   _showConfirm(msg, btnOkText, btnCancelText) {
     return new Promise(resolve => {
       const overlay = document.createElement('div');
-      overlay.className = 'kb-overlay';
+      overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
       overlay.style.zIndex = '9999';
       overlay.innerHTML = `
         <div class="kb-detail-modal" style="max-width: 400px; padding: 24px; text-align: center;">
