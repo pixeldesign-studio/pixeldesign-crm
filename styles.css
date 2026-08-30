@@ -2325,3 +2325,164 @@ details[open] .kb-collapse-icon { transform: rotate(180deg); }
   border-radius: 999px;
   padding: 3px 10px;
 }
+
+
+/* ════════════════════════════════════════════════════════════
+   POPUP CHI TIẾT ĐƠN — TÔNG BEIGE SÁNG        (30/08/2026)
+   ────────────────────────────────────────────────────────────
+   Cùng cách phân lớp như bản tối, chỉ lật tông:
+     nền popup  = beige ấm
+     khối       = sáng hơn nền một nấc (nổi lên)
+     ô nhập     = tối hơn khối một nấc (lõm xuống)
+   Phân cấp bằng ĐỘ SÁNG, không bằng đường kẻ cứng.
+
+   Lớp .kb-kanban chỉ gắn khi popup mở TỪ màn Kanban. Popup mở
+   từ màn Khách hàng, Công nợ, Đơn hàng... giữ nguyên như cũ.
+
+   MUỐN BỎ: xoá khối này + bỏ đoạn "+ (this.currentPage ===
+   'kanban' ? ' kb-kanban' : '')" ở các dòng overlay.className.
+   ════════════════════════════════════════════════════════════ */
+
+.kb-overlay.kb-kanban {
+  background: rgba(38, 30, 20, 0.46);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.kb-overlay.kb-kanban .kb-detail-modal {
+  /* Ô nhập lõm xuống, bề mặt phụ sáng hơn */
+  --clr-bg:            #F4F0E8;
+  --clr-bg-warm:       #FCFAF6;
+  --clr-card:          #FCFAF6;
+  --clr-surface:       #FCFAF6;
+  --clr-border:        rgba(42, 36, 32, 0.16);
+  --clr-border-light:  rgba(42, 36, 32, 0.10);
+  --clr-text:          #2A2420;
+  --clr-text-sub:      rgba(42, 36, 32, 0.72);
+  --clr-text-muted:    rgba(42, 36, 32, 0.55);
+  --clr-accent:        #9C7E5E;
+  --clr-accent-dark:   #876B4D;
+  --clr-accent-light:  #CBB799;
+  --clr-accent-gradient: linear-gradient(135deg, #CBB799, #9C7E5E);
+  --clr-hover:         rgba(156, 126, 94, 0.09);
+
+  background: rgba(243, 238, 230, 0.95);
+  backdrop-filter: blur(26px) saturate(130%);
+  -webkit-backdrop-filter: blur(26px) saturate(130%);
+  border: 1px solid rgba(42, 36, 32, 0.10);
+  box-shadow: 0 30px 90px rgba(38, 30, 20, 0.35);
+  color: #2A2420;
+}
+
+/* ─── Đầu & chân popup: liền mạch với thân ──────────────────── */
+.kb-overlay.kb-kanban .kb-detail-header,
+.kb-overlay.kb-kanban .kb-detail-footer {
+  background: transparent;
+  border-color: rgba(42, 36, 32, 0.08);
+}
+.kb-overlay.kb-kanban .kb-detail-id    { color: #2A2420; }
+.kb-overlay.kb-kanban .kb-detail-khach { color: rgba(42, 36, 32, 0.55); }
+.kb-overlay.kb-kanban .kb-detail-close { color: rgba(42, 36, 32, 0.50); }
+.kb-overlay.kb-kanban .kb-detail-close:hover {
+  background: rgba(42, 36, 32, 0.08);
+  color: #2A2420;
+}
+
+/* ─── Hai cột trong suốt, đường ngăn rất mờ ─────────────────── */
+.kb-overlay.kb-kanban .kb-detail-left {
+  background: transparent;
+  border-right-color: rgba(42, 36, 32, 0.07);
+}
+.kb-overlay.kb-kanban .kb-detail-right { background: transparent; }
+
+/* ═══ CÁC KHỐI: sáng hơn nền một nấc, nổi nhẹ ════════════════ */
+.kb-overlay.kb-kanban .kb-brief-display,
+.kb-overlay.kb-kanban .kb-detail-left > .kb-detail-section,
+.kb-overlay.kb-kanban .kb-detail-right .kb-detail-section,
+.kb-overlay.kb-kanban .kb-detail-left > details {
+  background: #FAF7F1 !important;
+  border: 1px solid rgba(42, 36, 32, 0.055) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;      /* tren nen sang, bong do ve han duong
+                                       bao quanh khoi -> nhin nhu the roi */
+  color: #2A2420 !important;
+}
+.kb-overlay.kb-kanban .kb-detail-left > .kb-detail-section { padding: 16px !important; }
+.kb-overlay.kb-kanban .kb-detail-left > details {
+  /* KHÔNG dùng overflow:hidden. Chromium co thẻ <details> về 2px khi
+     <summary> bên trong có display:flex — cả khối thành vạch trống. */
+  padding: 2px 0;
+}
+.kb-overlay.kb-kanban .kb-detail-left > details > summary {
+  background: transparent !important;
+  color: #9C7E5E !important;
+}
+.kb-overlay.kb-kanban .kb-detail-left > details > div {
+  margin-top: 0 !important;
+  padding: 0 16px 14px !important;
+}
+
+/* Tiêu đề khối: đủ rõ để mắt bắt được ngay đầu mỗi khối */
+.kb-overlay.kb-kanban .kb-detail-section-title {
+  color: #9C7E5E !important;
+  font-size: 12px !important;
+  letter-spacing: 0.09em !important;
+  padding-bottom: 10px !important;
+  margin-bottom: 4px !important;
+  border-bottom: 1px solid rgba(42, 36, 32, 0.075) !important;
+}
+.kb-overlay.kb-kanban .kb-detail-right .kb-detail-section-title {
+  font-size: 14px !important;
+  letter-spacing: normal !important;
+  color: #2A2420 !important;
+}
+.kb-overlay.kb-kanban .kb-detail-label { color: rgba(42, 36, 32, 0.58); }
+
+/* Nới khoảng cách giữa các khối cho đỡ mỏi mắt */
+.kb-overlay.kb-kanban .kb-detail-right { gap: 18px !important; }
+.kb-overlay.kb-kanban .kb-detail-left  { gap: 22px; }
+
+/* ─── Ô nhập: lõm xuống so với khối chứa nó ─────────────────── */
+.kb-overlay.kb-kanban .form-input,
+.kb-overlay.kb-kanban .form-select,
+.kb-overlay.kb-kanban .form-textarea,
+.kb-overlay.kb-kanban .kb-detail-value {
+  background: #F2EDE4;
+  border-color: rgba(42, 36, 32, 0.13);
+  color: #2A2420;
+}
+.kb-overlay.kb-kanban .form-input:focus,
+.kb-overlay.kb-kanban .form-select:focus,
+.kb-overlay.kb-kanban .form-textarea:focus {
+  background: #FFFFFF;
+  border-color: rgba(156, 126, 94, 0.65);
+  box-shadow: 0 0 0 3px rgba(156, 126, 94, 0.14);
+}
+.kb-overlay.kb-kanban .kb-detail-file { background: #F4F0E8; }
+.kb-overlay.kb-kanban .kb-detail-file:hover {
+  background: #FFFFFF;
+  border-color: rgba(156, 126, 94, 0.50);
+}
+.kb-overlay.kb-kanban .kb-detail-right .kb-info-row > span { color: rgba(42, 36, 32, 0.58); }
+.kb-overlay.kb-kanban .kb-detail-right .kb-info-row {
+  border-bottom: 1px solid rgba(42, 36, 32, 0.055) !important;
+}
+.kb-overlay.kb-kanban .kb-detail-right .kb-info-row:last-child { border-bottom: none !important; }
+
+/* Ô nền beige cũ viết thẳng trong code (#F5EFE6) — chỉnh cho khớp
+   đúng một nấc so với khối chứa nó */
+.kb-overlay.kb-kanban .kb-detail-right .kb-info-row[style*="background:#F5EFE6"] {
+  background: #F3EDE1 !important;
+  border-color: rgba(42, 36, 32, 0.075) !important;
+}
+
+/* ─── Nút ở chân popup ──────────────────────────────────────── */
+.kb-overlay.kb-kanban .btn-ghost {
+  background: #FCFAF6;
+  border-color: rgba(42, 36, 32, 0.16);
+  color: rgba(42, 36, 32, 0.78);
+}
+.kb-overlay.kb-kanban .btn-ghost:hover {
+  background: #FFFFFF;
+  color: #2A2420;
+}
