@@ -2802,3 +2802,15 @@ details[open] .kb-collapse-icon { transform: rotate(180deg); }
   .dt-doc-tien { font-size: 21px; }
   .dt-doc-duoi { font-size: 12px; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   MÀN DOANH THU: MỖI HÀNG MỘT BIỂU ĐỒ TRÊN MÀN NHỎ
+   ──────────────────────────────────────────────────────────
+   Cũ: hai biểu đồ luôn chia đôi hàng, chỉ xuống hàng khi màn
+   dưới 700px — nên iPad (768-1024px) vẫn nhét hai cái cạnh
+   nhau, biểu đồ bé và khó đọc. Nay chỉ xếp cạnh nhau khi còn
+   đủ 520px cho mỗi cái; hẹp hơn là tự xuống hàng.
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 1100px) {
+  #dt-charts-grid { grid-template-columns: 1fr !important; }
+}
