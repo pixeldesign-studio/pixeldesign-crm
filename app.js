@@ -3127,7 +3127,7 @@ const App = {
         `) : ''}
 
         <!-- BIỂU ĐỒ -->
-        <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap:16px; margin-bottom:16px;">
+        <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr)); gap:16px; margin-bottom:16px;">
           <!-- Biểu đồ đường (Trend) -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
             <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày</h3>
