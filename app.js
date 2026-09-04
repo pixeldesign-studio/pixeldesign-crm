@@ -2966,9 +2966,10 @@ const App = {
              const y = ngayLenDonDate.getFullYear();
              const dateStr = `${d < 10 ? '0'+d : d}/${m < 10 ? '0'+m : m}/${y}`;
              if (!trendMap[dateStr]) {
-                trendMap[dateStr] = { date: dateStr, parsedDate: ngayLenDonDate, total: 0 };
+                trendMap[dateStr] = { date: dateStr, parsedDate: ngayLenDonDate, total: 0, count: 0 };
              }
              trendMap[dateStr].total += soPhaiThu;
+             trendMap[dateStr].count += 1;
           }
        }
     });
@@ -3127,7 +3128,7 @@ const App = {
         `) : ''}
 
         <!-- BIỂU ĐỒ -->
-        <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr)); gap:16px; margin-bottom:16px;">
+        <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(620px, 100%), 1fr)); gap:16px; margin-bottom:16px;">
           <!-- Biểu đồ đường (Trend) -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
             <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày</h3>
@@ -3212,8 +3213,50 @@ const App = {
       </div>
     `;
 
-    const trendArr = Object.values(trendMap).sort((a, b) => b.parsedDate - a.parsedDate);
+    const trendArr = this._chenNgayTrong(Object.values(trendMap), startDate, endDate);
     setTimeout(() => this._initDoanhThuCharts(trendArr), 100);
+  },
+
+  /**
+   * Chèn vào biểu đồ cả những ngày KHÔNG có doanh số, để nhìn ra
+   * được ngày nào trống. Thiếu chúng thì hai ngày cách nhau một
+   * tuần trông như hai ngày liền kề, đọc ra sai hẳn nhịp độ.
+   *
+   * Chỉ chèn tới hôm nay, không vẽ trước những ngày chưa tới.
+   * Kỳ dài quá 92 ngày thì thôi, vì bấy nhiêu cột đã không đọc nổi.
+   */
+  _chenNgayTrong(mang, tuNgay, denNgay) {
+    const xepMoiTruoc = (a) => a.sort((x, y) => y.parsedDate - x.parsedDate);
+    if (!mang || !mang.length) return [];
+    if (!(tuNgay instanceof Date) || isNaN(tuNgay) || !(denNgay instanceof Date) || isNaN(denNgay)) {
+      return xepMoiTruoc(mang);
+    }
+
+    const homNay = new Date();
+    homNay.setHours(23, 59, 59, 999);
+
+    // Kỳ có thể bắt đầu trước ngày có đơn đầu tiên (vd lọc cả năm),
+    // vẽ một dãy dài toàn số 0 phía trước cũng vô nghĩa — nên bắt
+    // đầu từ ngày muộn hơn giữa: đầu kỳ và ngày có đơn sớm nhất.
+    const somNhat = mang.reduce((a, r) => (r.parsedDate < a ? r.parsedDate : a), mang[0].parsedDate);
+    let d = new Date(Math.max(tuNgay.getTime(), somNhat.getTime()));
+    d.setHours(0, 0, 0, 0);
+    const cuoi = new Date(Math.min(denNgay.getTime(), homNay.getTime()));
+
+    const soNgay = Math.floor((cuoi - d) / 86400000) + 1;
+    if (soNgay < 1 || soNgay > 92) return xepMoiTruoc(mang);
+
+    const theoNgay = {};
+    mang.forEach(r => { theoNgay[r.date] = r; });
+
+    const hai = (n) => (n < 10 ? '0' : '') + n;
+    const ra = [];
+    while (d <= cuoi) {
+      const nhan = `${hai(d.getDate())}/${hai(d.getMonth() + 1)}/${d.getFullYear()}`;
+      ra.push(theoNgay[nhan] || { date: nhan, parsedDate: new Date(d), total: 0, count: 0 });
+      d = new Date(d.getTime() + 86400000);
+    }
+    return xepMoiTruoc(ra);
   },
 
   // ══════════════════════════════════════════════════════════
@@ -3269,7 +3312,9 @@ const App = {
     oNgay.textContent = 'ngày ' + r.ngay + (cuoiKy ? ' · mới nhất' : '');
 
     const phan = [];
-    if (r.truoc == null) {
+    if (r.tien === 0) {
+      phan.push('<span class="dt-doc-chip bang">Không có đơn nào trong ngày</span>');
+    } else if (r.truoc == null) {
       phan.push('<span class="dt-doc-phu">ngày đầu tiên có doanh thu trong kỳ</span>');
     } else {
       const chenh = r.tien - r.truoc;
@@ -3284,12 +3329,12 @@ const App = {
       }
     }
     const tb = this._trendTB || 0;
-    if (tb > 0 && r.tien >= 0) {
+    if (tb > 0 && r.tien > 0) {
       const tren = r.tien >= tb;
       phan.push(`<span class="dt-doc-phu">&middot; ${tren ? 'trên' : 'dưới'} mức trung bình kỳ (${this._soRutGon(tb)})</span>`);
     }
     if (r.soGd) {
-      phan.push(`<span class="dt-doc-phu">&middot; ${r.soGd} giao dịch</span>`);
+      phan.push(`<span class="dt-doc-phu">&middot; ${r.soGd} đơn</span>`);
     }
     oDuoi.innerHTML = phan.join(' ');
   },
@@ -3395,6 +3440,9 @@ const App = {
           borderRadius: 4,
           borderSkipped: false,
           maxBarThickness: 44,
+          // Ngày bằng 0 vẫn để lại một vạch mỏng, để thấy rõ "ngày này
+          // có nhưng không có đơn" chứ không phải dữ liệu bị thiếu.
+          minBarLength: 3,
           order: 2,
         }];
         if (soNgay >= 4) {
