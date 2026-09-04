@@ -3130,7 +3130,14 @@ const App = {
         <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap:16px; margin-bottom:16px;">
           <!-- Biểu đồ đường (Trend) -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
-            <h3 style="margin:0 0 16px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày</h3>
+            <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày</h3>
+            <div class="dt-doc" id="dt-doc">
+              <div class="dt-doc-tren">
+                <span class="dt-doc-tien" id="dt-doc-tien">—</span>
+                <span class="dt-doc-ngay" id="dt-doc-ngay"></span>
+              </div>
+              <div class="dt-doc-duoi" id="dt-doc-duoi"></div>
+            </div>
             <div style="flex-grow:1; min-height:300px; position:relative; display:flex; justify-content:center; align-items:center;">
               <canvas id="chart-trend"></canvas>
               <div id="chart-trend-empty" style="display:none; color:var(--clr-text-muted); font-size:14px; position:absolute;">Không có dữ liệu để vẽ biểu đồ</div>
@@ -3209,6 +3216,84 @@ const App = {
     setTimeout(() => this._initDoanhThuCharts(trendArr), 100);
   },
 
+  // ══════════════════════════════════════════════════════════
+  // KHUNG ĐỌC SỐ CỦA BIỂU ĐỒ XU HƯỚNG
+  // ──────────────────────────────────────────────────────────
+  // Chủ tịch xem màn này trên điện thoại lúc đi ngoài. Bong bóng
+  // chú thích mặc định của Chart.js đòi chạm trúng cái chấm rộng
+  // vài pixel, mà chạm được rồi thì ngón tay lại che mất số.
+  // Nên: số hiện ở một khung cố định ngay trên biểu đồ, kéo ngón
+  // dọc theo biểu đồ thì khung chạy theo, bỏ tay ra thì tự quay
+  // về ngày mới nhất — mở lên là thấy ngay số hôm nay.
+  // ══════════════════════════════════════════════════════════
+
+  /** Rút gọn số tiền cho gọn trục và nhãn: 2.500.000 -> "2,5 tr". */
+  _soRutGon(so) {
+    const n = Number(so) || 0;
+    const d = Math.abs(n);
+    const dau = n < 0 ? '-' : '';
+    if (d >= 1e9) return dau + (d / 1e9).toFixed(d >= 1e10 ? 0 : 1).replace('.', ',') + ' tỷ';
+    if (d >= 1e6) return dau + (d / 1e6).toFixed(d >= 1e7 ? 0 : 1).replace('.', ',') + ' tr';
+    if (d >= 1e3) return dau + Math.round(d / 1e3) + ' k';
+    return dau + Math.round(d);
+  },
+
+  /** Chart.js gọi vào đây mỗi lần chạm/rê chuột trên biểu đồ. */
+  _docSoTrend(ctx) {
+    const tt = ctx && ctx.tooltip;
+    if (!tt || tt.opacity === 0 || !tt.dataPoints || !tt.dataPoints.length) {
+      this._veDocSo(null);
+      return;
+    }
+    this._veDocSo(tt.dataPoints[0].dataIndex);
+  },
+
+  /** Vẽ khung đọc số. viTri = null nghĩa là lấy ngày mới nhất. */
+  _veDocSo(viTri) {
+    const ds = this._trendData || [];
+    const oTien = document.getElementById('dt-doc-tien');
+    const oNgay = document.getElementById('dt-doc-ngay');
+    const oDuoi = document.getElementById('dt-doc-duoi');
+    const khung = document.getElementById('dt-doc');
+    if (!oTien || !oNgay || !oDuoi) return;
+
+    if (!ds.length) { if (khung) khung.style.display = 'none'; return; }
+    if (khung) khung.style.display = '';
+
+    const k = (viTri == null || !ds[viTri]) ? ds.length - 1 : viTri;
+    const r = ds[k];
+    const cuoiKy = (k === ds.length - 1);
+
+    oTien.textContent = this._formatVND(r.tien);
+    oTien.style.color = r.tien < 0 ? '#C0392B' : 'var(--clr-text)';
+    oNgay.textContent = 'ngày ' + r.ngay + (cuoiKy ? ' · mới nhất' : '');
+
+    const phan = [];
+    if (r.truoc == null) {
+      phan.push('<span class="dt-doc-phu">ngày đầu tiên có doanh thu trong kỳ</span>');
+    } else {
+      const chenh = r.tien - r.truoc;
+      if (chenh === 0) {
+        phan.push('<span class="dt-doc-chip bang">= bằng ngày trước đó</span>');
+      } else {
+        const len = chenh > 0;
+        phan.push(`<span class="dt-doc-chip ${len ? 'len' : 'xuong'}">`
+          + (len ? '&#9650; +' : '&#9660; −')
+          + this._formatVND(Math.abs(chenh)).replace(' đ', '')
+          + '</span><span class="dt-doc-phu">so với ngày trước đó</span>');
+      }
+    }
+    const tb = this._trendTB || 0;
+    if (tb > 0 && r.tien >= 0) {
+      const tren = r.tien >= tb;
+      phan.push(`<span class="dt-doc-phu">&middot; ${tren ? 'trên' : 'dưới'} mức trung bình kỳ (${this._soRutGon(tb)})</span>`);
+    }
+    if (r.soGd) {
+      phan.push(`<span class="dt-doc-phu">&middot; ${r.soGd} giao dịch</span>`);
+    }
+    oDuoi.innerHTML = phan.join(' ');
+  },
+
   _initDoanhThuCharts(dailyArr) {
     if (!window.Chart) return;
     this._doanhThuCharts = this._doanhThuCharts || {};
@@ -3224,51 +3309,142 @@ const App = {
       if (!dailyArr || dailyArr.length === 0) {
         canvasTrend.style.display = 'none';
         emptyTrend.style.display = 'block';
+        this._trendData = [];   // xoá số của kỳ trước, không để sót lại
+        this._trendTB = 0;
+        this._veDocSo(null);    // không có dữ liệu thì ẩn luôn khung đọc số
       } else {
         canvasTrend.style.display = 'block';
         emptyTrend.style.display = 'none';
 
+        // ── DỮ LIỆU ───────────────────────────────────────
+        // dailyArr đang xếp mới nhất trước; biểu đồ cần cũ -> mới.
         const chartData = [...dailyArr].reverse();
-        const labels = chartData.map(r => r.date.substring(0, 5)); 
+        const labels  = chartData.map(r => r.date.substring(0, 5));
+        const giaTri  = chartData.map(r => r.total);
+        const soNgay  = giaTri.length;
+        const trungBinh = soNgay ? giaTri.reduce((a, b) => a + b, 0) / soNgay : 0;
 
-        const ctx = canvasTrend.getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, canvasTrend.parentElement.offsetHeight || 300);
-        gradient.addColorStop(0, 'rgba(183, 168, 143, 0.5)'); // #B7A88F
-        gradient.addColorStop(1, 'rgba(183, 168, 143, 0.0)');
+        // Trung bình động 7 ngày: làm phẳng nhiễu của từng ngày lẻ
+        // để nhìn ra hướng đi chung của cả kỳ.
+        const tb7 = giaTri.map((_, k) => {
+          const lat = giaTri.slice(Math.max(0, k - 6), k + 1);
+          return lat.reduce((a, b) => a + b, 0) / lat.length;
+        });
+
+        // Nhớ lại để khung đọc số phía trên dùng
+        this._trendData = chartData.map((r, k) => ({
+          ngay:  r.date,
+          tien:  r.total,
+          soGd:  r.count,
+          truoc: k > 0 ? giaTri[k - 1] : null,
+        }));
+        this._trendTB = trungBinh;
+
+        // Cột trên mức trung bình thì đậm, dưới thì nhạt, âm (hoàn
+        // tiền) thì đỏ — để nhìn phát là biết ngày nào hơn ngày nào,
+        // không cần chạm vào đâu cả.
+        const mauCot = giaTri.map(v =>
+          v < 0 ? 'rgba(192, 57, 43, 0.6)'
+                : (v >= trungBinh ? '#B7A88F' : 'rgba(183, 168, 143, 0.33)'));
+
+        const nhanTB = 'TB ' + this._soRutGon(trungBinh);
+        const duongTrungBinh = {
+          id: 'duongTrungBinh',
+          afterDatasetsDraw(chart) {
+            if (!(trungBinh > 0)) return;
+            const { ctx, chartArea, scales } = chart;
+            const y = scales.y.getPixelForValue(trungBinh);
+            if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(138, 114, 76, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Nhãn nằm trên nền trắng bo góc, nếu không nó chồng lên
+            // đường trung bình 7 ngày và cột, đọc không ra.
+            ctx.font = '700 10px Inter, system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            const rong = ctx.measureText(nhanTB).width;
+            const x2 = chartArea.right - 2;
+            const x1 = x2 - rong - 10;
+            const cao = 15;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            if (ctx.roundRect) {
+              ctx.beginPath();
+              ctx.roundRect(x1, y - cao / 2, rong + 10, cao, 7);
+              ctx.fill();
+            } else {
+              ctx.fillRect(x1, y - cao / 2, rong + 10, cao);
+            }
+            ctx.fillStyle = 'rgba(138, 114, 76, 0.95)';
+            ctx.fillText(nhanTB, x2 - 5, y);
+            ctx.restore();
+          }
+        };
+
+        const datasets = [{
+          type: 'bar',
+          label: 'Doanh số',
+          data: giaTri,
+          backgroundColor: mauCot,
+          borderRadius: 4,
+          borderSkipped: false,
+          maxBarThickness: 44,
+          order: 2,
+        }];
+        if (soNgay >= 4) {
+          datasets.push({
+            type: 'line',
+            label: 'Trung bình 7 ngày',
+            data: tb7,
+            borderColor: '#8A724C',
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHitRadius: 0,
+            tension: 0.35,
+            fill: false,
+            order: 1,
+          });
+        }
 
         this._doanhThuCharts.trend = new Chart(canvasTrend, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Doanh số (VNĐ)',
-              data: chartData.map(r => r.total),
-              borderColor: '#B7A88F',
-              backgroundColor: gradient,
-              borderWidth: 2,
-              tension: 0.4,
-              fill: true,
-              pointBackgroundColor: '#B7A88F',
-            }]
-          },
+          data: { labels, datasets },
+          plugins: [duongTrungBinh],
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { 
+            // Chạm ĐÂU trên cột dọc của ngày đó cũng ra số, không cần
+            // trúng đúng cái chấm như mặc định của Chart.js.
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
               legend: { display: false },
+              // Tắt bong bóng nổi (trên điện thoại hay bị ngón tay che),
+              // đẩy số lên khung cố định phía trên biểu đồ.
               tooltip: {
-                callbacks: {
-                  title: function() { return ''; },
-                  label: function(context) {
-                    let value = context.raw || 0;
-                    return 'Doanh số ngày ' + (context.label || '') + ': ' + Number(value).toLocaleString('vi-VN') + ' đ';
-                  }
-                }
-              }
+                enabled: false,
+                external: (ctx) => this._docSoTrend(ctx),
+              },
             },
-            scales: { y: { beginAtZero: true } }
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { callback: (v) => this._soRutGon(v), font: { size: 11 } },
+              },
+              x: {
+                grid: { display: false },
+                ticks: { autoSkip: true, maxTicksLimit: 8, maxRotation: 0, font: { size: 11 } },
+              },
+            },
           }
         });
+
+        this._veDocSo(null); // chưa chạm thì hiện ngày mới nhất
       }
     }
 
