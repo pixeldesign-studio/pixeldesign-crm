@@ -2811,6 +2811,6 @@ details[open] .kb-collapse-icon { transform: rotate(180deg); }
    nhau, biểu đồ bé và khó đọc. Nay chỉ xếp cạnh nhau khi còn
    đủ 520px cho mỗi cái; hẹp hơn là tự xuống hàng.
    ══════════════════════════════════════════════════════════ */
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   #dt-charts-grid { grid-template-columns: 1fr !important; }
 }
