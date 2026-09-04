@@ -420,7 +420,7 @@ const App = {
         Authorization:  `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ range: fullRange, majorDimension: 'ROWS', values }),
+      body: JSON.stringify({ range: fullRange, majorDimension: 'ROWS', values: this._epNgayThanhChu(values) }),
     });
 
     if (!res.ok) {
@@ -454,7 +454,7 @@ const App = {
         Authorization:  `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ range, majorDimension: 'ROWS', values }),
+      body: JSON.stringify({ range, majorDimension: 'ROWS', values: this._epNgayThanhChu(values) }),
     });
 
     if (!res.ok) {
@@ -826,17 +826,87 @@ const App = {
    * Chuyển mảng 2 chiều từ Sheets API thành mảng object.
    * Hàng đầu tiên là tên cột.
    */
+  // ══════════════════════════════════════════════════════════
+  // NGÀY THÁNG ĐỌC TỪ GOOGLE SHEETS
+  // ──────────────────────────────────────────────────────────
+  // Google Sheets lưu ngày bên trong là một CON SỐ (số ngày kể từ
+  // 30/12/1899). Bình thường nó hiện ra thành ngày nên app đọc được.
+  // Nhưng nếu ô ngày chưa khoá định dạng "văn bản thuần", Sheets sẽ
+  // đổi chuỗi app ghi xuống thành ngày thật, rồi hiện ra con số thô —
+  // ví dụ 03/09/2026 biến thành 46090.
+  //
+  // Lúc đó app tách chuỗi bằng dấu "/" sẽ ra "ngày không hợp lệ", và
+  // mọi phép so sánh với ngày không hợp lệ đều trả về false — nghĩa là
+  // bộ lọc kỳ báo cáo KHÔNG loại được dòng đó, nó lọt vào mọi kỳ.
+  //
+  // Nên ở đây chặn ngay từ cửa đọc: gặp số thì đổi lại thành ngày.
+  // Cách chữa tận gốc vẫn là khoá định dạng cột bên Sheets.
+  // ══════════════════════════════════════════════════════════
+
+  /** Tên cột nào được coi là cột ngày. */
+  _laCotNgay(ten) {
+    const t = String(ten || '').toLowerCase();
+    return t === 'ngay' || t.startsWith('ngay_') || t.endsWith('_ngay')
+        || t === 'thoi_gian' || t.startsWith('thoi_gian_')
+        || t === 'deadline' || t === 'han_giao';
+  },
+
+  /**
+   * Đổi số của Sheets thành "dd/mm/yyyy" (kèm giờ nếu có phần lẻ).
+   * Không phải số ngày hợp lệ thì trả về nguyên xi.
+   * Khoảng nhận: 30000 (1982) đến 60000 (2064) — đủ rộng mà không
+   * đụng nhầm vào các con số khác.
+   */
+  _ngayTuSheet(giaTri) {
+    const chuoi = String(giaTri == null ? '' : giaTri).trim();
+    if (!/^\d{4,5}(\.\d+)?$/.test(chuoi)) return chuoi;
+    const so = parseFloat(chuoi);
+    if (!(so >= 30000 && so <= 60000)) return chuoi;
+
+    const nguyen = Math.floor(so);
+    const le = so - nguyen;
+    const moc = Date.UTC(1899, 11, 30);
+    const d = new Date(moc + nguyen * 86400000);
+    const hai = (n) => (n < 10 ? '0' : '') + n;
+    let ra = `${hai(d.getUTCDate())}/${hai(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+    if (le > 0.00001) {
+      const giay = Math.round(le * 86400);
+      ra += ` ${hai(Math.floor(giay / 3600) % 24)}:${hai(Math.floor(giay / 60) % 60)}`;
+    }
+    return ra;
+  },
+
   _parseSheet(values) {
     if (!values || values.length < 1) return [];
     const headers = values[0];
     if (values.length < 2) return [];
     return values.slice(1).map(row => {
       const obj = {};
+      const soGoc = [];
       headers.forEach((h, i) => {
-        obj[h.trim()] = (row[i] !== undefined) ? String(row[i]).trim() : '';
+        const ten = String(h || '').trim();
+        let v = (row[i] !== undefined) ? String(row[i]).trim() : '';
+        if (v && this._laCotNgay(ten)) {
+          const doi = this._ngayTuSheet(v);
+          if (doi !== v) { soGoc.push(ten); v = doi; }
+        }
+        obj[ten] = v;
       });
+      // Đánh dấu để màn Doanh thu nhắc chủ tịch sửa lại ô bên Sheets.
+      if (soGoc.length) obj._ngayLaSo = soGoc;
       return obj;
     });
+  },
+
+  // ── GHI NGÀY XUỐNG SHEETS ─────────────────────────────────
+  // Thêm dấu nháy đơn ở đầu để Sheets hiểu đây là VĂN BẢN, không tự
+  // đổi thành ngày. Dấu nháy này Sheets nuốt luôn, không hiện ra ô,
+  // đọc lại vẫn đúng "dd/mm/yyyy", copy sang Zalo vẫn sạch.
+  _epNgayThanhChu(values) {
+    const mau = /^\d{1,2}\/\d{1,2}\/\d{4}( \d{1,2}:\d{2}(:\d{2})?)?$/;
+    return (values || []).map(hang =>
+      (hang || []).map(o => (typeof o === 'string' && mau.test(o.trim())) ? "'" + o.trim() : o)
+    );
   },
 
   /**
@@ -2906,6 +2976,11 @@ const App = {
     tongThu = tongThuDonKy + tongThuNoCu;
     soGiaoDich = soDon;
 
+    // Dòng nào có ô ngày bị Sheets đổi thành số thì gom lại để cảnh báo.
+    // App đã tự đọc ra ngày nhưng ngày đó có thể bị đảo ngày/tháng nếu
+    // file Sheets đang để ngôn ngữ Mỹ — phải gõ lại tay bên Sheets.
+    this._ngayLoiDoanhThu = (this._doanhThuData || []).filter(r => r._ngayLaSo);
+
     // Sắp xếp ngày từ mới nhất đến cũ nhất (mới nhất ở trên)
     const dailyArr = Object.values(dailyMap).sort((a, b) => b.parsedDate - a.parsedDate);
     
@@ -3077,6 +3152,24 @@ const App = {
             </div>
           </div>
         </div>
+
+        ${(this._ngayLoiDoanhThu || []).length ? `
+        <div style="background:#FFF6E5; border:1px solid #E8C88A; border-radius:var(--radius-lg); padding:16px 20px; margin-bottom:20px;">
+          <div style="font-weight:700; color:#8A6410; font-size:14px; margin-bottom:6px;">
+            &#9888; ${this._ngayLoiDoanhThu.length} giao dịch có ô ngày bị Google Sheets đổi thành con số
+          </div>
+          <div style="font-size:13px; color:#6B5E52; line-height:1.6;">
+            App đã tự đọc ra ngày để báo cáo không bị lệch, nhưng <b>ngày đó có thể bị đảo ngày với tháng</b>.
+            Mở file TAI-CHINH, tab GIAO_DICH_TIEN, gõ lại tay các ô sau, rồi bấm chọn nguyên cột ngày →
+            Định dạng → Số → Văn bản thuần.
+            <div style="margin-top:8px;">
+              ${this._ngayLoiDoanhThu.map(r =>
+                `<span style="display:inline-block; background:#fff; border:1px solid #E8C88A; border-radius:6px; padding:3px 8px; margin:0 6px 6px 0; font-size:12px;">
+                   ${this._escHtml(r.ma_don || '')} &middot; ${this._escHtml(r.ngay || '')}
+                 </span>`).join('')}
+            </div>
+          </div>
+        </div>` : ''}
 
         <!-- BẢNG THEO NGÀY -->
         <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden;">
