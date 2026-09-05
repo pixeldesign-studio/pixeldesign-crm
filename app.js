@@ -108,7 +108,10 @@ const App = {
 
     const { role } = this.session;
     const adminSaleOnlyPages = ['doanh-thu', 'don-hang', 'cong-no', 'hieu-suat-sale'];
-    const adminDesignerOnlyPages = ['hieu-suat'];
+    // 05/09/2026: mở trang Hiệu suất Designer cho cả sale — sale cần
+    // nhìn được năng lực và tải của designer khi hứa hẹn với khách.
+    // Trang này chỉ có điểm và số đơn, không có số lương.
+    const adminDesignerOnlyPages = [];
     
     if (adminSaleOnlyPages.includes(page) && role !== CONFIG.ROLES.ADMIN && role !== CONFIG.ROLES.SALE) {
       this._showToast('Bạn không có quyền truy cập trang này.', 'error');
@@ -975,6 +978,11 @@ const App = {
     document.querySelectorAll('[data-role="admin-designer"]').forEach(el => {
       const isVisible = (role === CONFIG.ROLES.ADMIN || role === CONFIG.ROLES.DESIGNER);
       el.style.display = isVisible ? '' : 'none';
+    });
+    // Mọi vai đều thấy. Đánh dấu tường minh thay vì bỏ trống thuộc tính,
+    // để sau này đọc lại biết đây là chủ ý chứ không phải quên gán.
+    document.querySelectorAll('[data-role="all"]').forEach(el => {
+      el.style.display = '';
     });
     // Tab sang app ETSY: CHI nhung email khai trong CONFIG.ETSY_USERS (admin khong thay)
     const myEmail = (this.session?.email || '').toLowerCase().trim();
@@ -3618,11 +3626,6 @@ const App = {
     const role = this.session?.role;
     const content = document.getElementById('page-content');
     
-    if (role === 'sale') {
-      content.innerHTML = '<div style="padding:40px; text-align:center; color:var(--clr-error);">Bạn không có quyền truy cập trang này.</div>';
-      return;
-    }
-
     content.innerHTML = '<div class="kb-loading"><div class="spinner"></div> Đang tải dữ liệu báo cáo...</div>';
 
     try {
