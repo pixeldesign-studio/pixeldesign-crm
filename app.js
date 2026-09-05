@@ -6499,21 +6499,35 @@ const App = {
       this._showToast('Đang ghi điểm xử lý...', 'info');
       const todayStr = new Date().toISOString().substring(0, 10); // YYYY-MM-DD
 
-      // 2. TẠM BỎ bước xóa các dòng cũ của mã đơn trong DIEM_XU_LY (tránh lỗi undefined row index)
-      // Việc xử lý chống trùng dòng sẽ được làm ở lệnh sau như yêu cầu.
-      
-      // 3. Append dòng mới vào DIEM_XU_LY (ngày prefix "'" để ép Google Sheets ghi chuỗi)
-      const appendValues = uniqueDesigners.map(name => [
-        maDon,
-        name,
-        finalData[name],
-        "'" + todayStr
-      ]);
+      // 2. Designer nào ĐÃ CÓ dòng trong DIEM_XU_LY thì SỬA dòng đó,
+      //    chưa có mới thêm dòng mới.
+      //    Trước đây chỗ này luôn thêm dòng mới, không đụng tới dòng cũ —
+      //    nên bấm "Sửa lại điểm xử lý" là sinh ra một bộ dòng thứ hai cho
+      //    cùng một đơn, và màn Hiệu suất đếm điểm hai lần.
+      const rawXuLy = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DIEM_XU_LY).catch(() => []);
+      const dongCuTheoDesigner = {};
+      rawXuLy.forEach((r, i) => {
+        if (r.ma_don !== maDon) return;
+        const ten = (r.ten_designer || r.designer || '').trim();
+        if (ten && !dongCuTheoDesigner[ten]) dongCuTheoDesigner[ten] = i + 2; // +1 header, +1 vì mảng đếm từ 0
+      });
 
-      if (appendValues.length > 0) {
-        console.log(`[DEBUG chot diem] danh sách sau khi lọc, độ dài = ${appendValues.length}:`, appendValues);
-        await this._appendSheet(CONFIG.SHEETS.DIEM_XU_LY, appendValues);
-        console.log(`[DEBUG chot diem] đã append ${appendValues.length} dòng vào DIEM_XU_LY xong`);
+      const lenhGhi = [];
+      const themMoi = [];
+      uniqueDesigners.forEach(name => {
+        const dong = dongCuTheoDesigner[name];
+        if (dong) {
+          // Ngày prefix "'" để Google Sheets giữ nguyên dạng chữ, không tự đổi thành số ngày
+          lenhGhi.push(this._writeSheet(CONFIG.SHEETS.DIEM_XU_LY, `C${dong}:D${dong}`, [[finalData[name], "'" + todayStr]]));
+        } else {
+          themMoi.push([maDon, name, finalData[name], "'" + todayStr]);
+        }
+      });
+      if (themMoi.length > 0) lenhGhi.push(this._appendSheet(CONFIG.SHEETS.DIEM_XU_LY, themMoi));
+
+      if (lenhGhi.length > 0) {
+        console.log(`[DEBUG chot diem] sửa ${uniqueDesigners.length - themMoi.length} dòng, thêm ${themMoi.length} dòng`);
+        await Promise.all(lenhGhi);
       }
 
       // 4. Đặt cờ da_ghi_diem_xu_ly trong DON_HANG
