@@ -6235,7 +6235,10 @@ const App = {
       
       const rows = assignedDesigners.map(d => {
          const matchingRow = diemRows.find(r => r.ma_don === maDon && r.ten_designer === d);
-         const score = matchingRow && matchingRow.diem !== undefined ? matchingRow.diem : '';
+         // Cột trong DIEM_XU_LY tên là diem_tam, không phải diem. Đọc sai
+         // tên thì hộp Sửa điểm luôn hiện trống, và bấm xác nhận là ghi
+         // đè điểm rỗng lên điểm cũ.
+         const score = matchingRow ? (matchingRow.diem_tam ?? matchingRow.diem ?? '') : '';
          return { designer: d, score: score };
       });
 
@@ -9341,6 +9344,7 @@ const App = {
         let debugFoundCount = 0;
         const tempInputs = document.querySelectorAll('#kb-detail-overlay .det-designer-score-temp');
         debugFoundCount = tempInputs.length;
+
         
         tempInputs.forEach(inp => {
           const d = inp.getAttribute('data-designer');
@@ -9365,7 +9369,15 @@ const App = {
         const xuLyWrites = [];
         const todayStr = new Date().toISOString().substring(0, 10); // YYYY-MM-DD
 
-        assignedDesigners.forEach(d => {
+        // Popup KHÔNG còn ô nhập điểm tạm nữa (đã bỏ ở bản trước), nhưng
+        // đoạn đọc điểm vẫn còn nguyên. Không có ô nào thì mọi designer
+        // đều ra điểm rỗng, và vòng lặp bên dưới đem chuỗi rỗng ĐÈ LÊN
+        // điểm thật trong DIEM_XU_LY, đồng thời dời ngày ghi nhận về hôm
+        // nay. Nghĩa là cứ bấm Lưu thẻ một lần là điểm xử lý của đơn đó
+        // bay mất. Không có ô nào trên màn hình thì không có gì để lưu.
+        const coONhapDiem = tempInputs.length > 0;
+
+        if (coONhapDiem) assignedDesigners.forEach(d => {
           const newScoreTam = scoreTempInputs[d] || '';
           const existingRow = rowsXuLyForDon.find(r => {
             const t = r.ten_designer || r.designer || r.ho_ten || r.ten || '';
@@ -9391,12 +9403,15 @@ const App = {
            await Promise.all(xuLyWrites);
         }
 
-        // Cập nhật local cache điểm tạm
-        if (!this._kanbanDiemXuLyMap) this._kanbanDiemXuLyMap = {};
-        if (!this._kanbanDiemXuLyMap[maDon]) this._kanbanDiemXuLyMap[maDon] = {};
-        assignedDesigners.forEach(d => {
-           this._kanbanDiemXuLyMap[maDon][d] = scoreTempInputs[d] || '';
-        });
+        // Cập nhật local cache điểm tạm — cũng chỉ khi thật sự có ô nhập,
+        // nếu không màn hình sẽ hiện điểm rỗng dù dưới Sheets vẫn còn.
+        if (coONhapDiem) {
+          if (!this._kanbanDiemXuLyMap) this._kanbanDiemXuLyMap = {};
+          if (!this._kanbanDiemXuLyMap[maDon]) this._kanbanDiemXuLyMap[maDon] = {};
+          assignedDesigners.forEach(d => {
+             this._kanbanDiemXuLyMap[maDon][d] = scoreTempInputs[d] || '';
+          });
+        }
       }
       
       // Build updated don object
