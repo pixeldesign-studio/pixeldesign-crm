@@ -3637,9 +3637,13 @@ const App = {
       ]);
       
       const validDonMap = {};
+      const ngayDuyetMap = {};
       (donHangData || []).filter(d => d.da_an !== 'yes').forEach(d => {
-        if (d.ma_don) validDonMap[d.ma_don] = true;
+        if (!d.ma_don) return;
+        validDonMap[d.ma_don] = true;
+        ngayDuyetMap[d.ma_don] = String(d.ngay_duyet_mau || '').trim();
       });
+      this._hieuSuatNgayDuyetMap = ngayDuyetMap;
 
       this._hieuSuatXuLyRows = (xuLyRows || []).filter(r => validDonMap[r.ma_don]);
       this._hieuSuatLuongRows = (luongRows || []).filter(r => validDonMap[r.ma_don]);
@@ -3650,6 +3654,22 @@ const App = {
       console.error(e);
       content.innerHTML = `<div style="padding:24px; color:red; text-align:center;">Lỗi tải dữ liệu: ${e.message}</div>`;
     }
+  },
+
+  // Doc diem tu Sheets: chap nhan ca "1.95" lan "1,95".
+  // Neu dinh dang file doi sang Viet Nam, parseFloat("1,95") = 1 -> sai am tham. Ham nay chan viec do.
+  _docDiem(giaTri) {
+    const so = parseFloat(String(giaTri == null ? '' : giaTri).trim().replace(/,/g, '.'));
+    return isNaN(so) ? 0 : so;
+  },
+
+  // Ngay duyet mau tu Sheets dang dd/mm/yyyy -> Date
+  _ngayDuyetSangDate(chuoi) {
+    const p = String(chuoi || '').replace(/'/g, '').trim().split('/');
+    if (p.length !== 3) return null;
+    const d = parseInt(p[0], 10), m = parseInt(p[1], 10), y = parseInt(p[2], 10);
+    if (!d || !m || !y) return null;
+    return new Date(y, m - 1, d);
   },
 
   _renderHieuSuatContent(loaiDiem = 'xu_ly', filterType = 'month', customFrom = '', customTo = '') {
@@ -3703,10 +3723,19 @@ const App = {
       });
     }
 
+    // DIEM LUONG loc theo NGAY DUYET MAU cua don - dung y het tab Luong,
+    // de hai man hinh khong bao gio le nhau nua.
+    const donThieuNgayDuyet = [];
     if (loaiDiem === 'luong' && this._hieuSuatLuongRows) {
+      const mapNgayDuyet = this._hieuSuatNgayDuyetMap || {};
       this._hieuSuatLuongRows.forEach(r => {
-        const pd = parseDate(r.ngay_ghi_nhan);
-        if (!pd) return; // Bỏ qua nếu ngày trống
+        const chuoiNgay = mapNgayDuyet[r.ma_don] || '';
+        if (!chuoiNgay) {
+          if (r.ma_don && !donThieuNgayDuyet.includes(r.ma_don)) donThieuNgayDuyet.push(r.ma_don);
+          return;
+        }
+        const pd = this._ngayDuyetSangDate(chuoiNgay);
+        if (!pd) return;
         if (pd >= startDate && pd <= endDate) {
           if (isDesigner) {
             const t = (r.ten_designer || r.designer || r.ho_ten || r.ten || '').trim().toLowerCase();
@@ -3743,8 +3772,8 @@ const App = {
       if (!t) return;
       
       addDesignerIfMissing(t);
-      const score = parseFloat((r.diem || '').toString().replace(/,/g, '.'));
-      if (!isNaN(score) && score > 0) {
+      const score = this._docDiem(r.diem);
+      if (score > 0) {
          designerMap[t].tongDiemLuong += score;
          if (r.ma_don) designerMap[t].soDonLuong.add(r.ma_don);
       }
@@ -3795,6 +3824,16 @@ const App = {
           </div>
         </div>
     `;
+
+    // Bao ro nhung don bi bo qua, thay vi am tham lam mat diem nhu truoc
+    if (loaiDiem === 'luong' && donThieuNgayDuyet.length > 0) {
+      html += `
+        <div style="background:#FFF8E1; border:1px solid #F0D090; border-radius:var(--radius-lg); padding:16px 20px; color:#8A6D1F; font-size:14px; line-height:1.6;">
+          <b>⚠️ ${donThieuNgayDuyet.length} đơn chưa có Ngày duyệt mẫu nên KHÔNG được tính vào bảng này và cũng không được tính lương:</b><br>
+          ${this._escHtml(donThieuNgayDuyet.join(', '))}<br>
+          <span style="font-size:13px;">Sale hoặc quản lý mở từng đơn, điền ô <b>Ngày duyệt mẫu</b> rồi bấm Lưu là điểm sẽ hiện lại.</span>
+        </div>`;
+    }
 
     const hasData = (loaiDiem === 'xu_ly' && xuLyRows.length > 0) || (loaiDiem === 'luong' && luongRows.length > 0);
     if (!hasData) {
@@ -5099,7 +5138,7 @@ const App = {
         else if (loaiLuong === 'designer_hieu_suat') {
            diemOfDesigner = validDiemInMonth
               .filter(d => (d.ten_designer || '').trim().toLowerCase() === hoTen.toLowerCase())
-              .reduce((sum, d) => sum + parseFloat(d.diem || 0), 0);
+              .reduce((sum, d) => sum + this._docDiem(d.diem), 0);
 
            const kpiDiem = parseFloat(nhanVien.kpi_diem) || 0;
            const donGiaDiem = this._parseCurrency(nhanVien.don_gia_diem);
@@ -6705,7 +6744,36 @@ const App = {
     }
   },
 
+  // Ngay duyet mau quyet dinh diem luong roi vao thang nao.
+  // Thieu no thi diem bi mat khoi bang luong -> phai chan tu dau.
+  _ngayDuyetMauCuaDon(maDon) {
+    const oDangMo = document.getElementById('det-ngay-duyet-mau');
+    if (oDangMo && document.getElementById('kb-detail-overlay')) {
+      const v = (oDangMo.value || '').trim();
+      if (v) return v;
+    }
+    const don = (this._kanbanData || []).find(d => d.ma_don === maDon)
+             || (this._danhSachDon || []).find(d => d.ma_don === maDon);
+    return don ? String(don.ngay_duyet_mau || '').trim() : '';
+  },
+
+  _canhBaoThieuNgayDuyetMau(maDon) {
+    const laSaleAdmin = this.session?.role === 'admin' || this.session?.role === 'sale';
+    this._showToast(
+      laSaleAdmin
+        ? `Đơn ${maDon} chưa có Ngày duyệt mẫu. Hãy điền ô "Ngày duyệt mẫu" trong đơn rồi bấm Lưu, sau đó mới chốt điểm lương được.`
+        : `Đơn ${maDon} chưa có Ngày duyệt mẫu. Nhờ sale hoặc quản lý điền giúp rồi mới chốt điểm lương được.`,
+      'error');
+  },
+
   _openChotLuongModal(maDon) {
+    // CHAN: khong cho chot diem luong khi don chua co Ngay duyet mau
+    if (!this._ngayDuyetMauCuaDon(maDon)) {
+      this._canhBaoThieuNgayDuyetMau(maDon);
+      console.log(`[DEBUG chot luong] tu choi mo hop: ${maDon} chua co ngay_duyet_mau`);
+      return;
+    }
+
     const existing = document.getElementById('chot-luong-overlay');
     if (existing) existing.remove();
 
@@ -6870,6 +6938,16 @@ const App = {
         return;
       }
 
+      // 2b. CHAN lan 2: doc DON_HANG that (sau khi _saveCardDetail da luu) de chac chan co ngay_duyet_mau
+      const donHangRows = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG);
+      const donRowIdx = donHangRows.findIndex(r => r.ma_don === maDon);
+      const ngayDuyetThat = donRowIdx !== -1 ? String(donHangRows[donRowIdx].ngay_duyet_mau || '').trim() : '';
+      if (!ngayDuyetThat) {
+        this._canhBaoThieuNgayDuyetMau(maDon);
+        console.log(`[DEBUG chot luong] tu choi ghi: ${maDon} chua co ngay_duyet_mau tren Sheets`);
+        return;
+      }
+
       // 3. Append vào DIEM_DESIGNER
       const todayStr = new Date().toISOString().substring(0, 10);
       const appendValues = Object.keys(finalData).map(name => [
@@ -6886,9 +6964,7 @@ const App = {
         console.log(`[DEBUG chot luong] không có dòng điểm nào để ghi vào DIEM_DESIGNER.`);
       }
 
-      // 4. Đặt cờ da_ghi_diem_luong trong DON_HANG (cột W)
-      const donHangRows = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG);
-      const donRowIdx = donHangRows.findIndex(r => r.ma_don === maDon);
+      // 4. Đặt cờ da_ghi_diem_luong trong DON_HANG (cột W) - dung lai ban doc o buoc 2b
       if (donRowIdx !== -1) {
         const headerRes = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(CONFIG.SHEETS.DON_HANG + '!1:1')}`,
@@ -9612,7 +9688,7 @@ const App = {
            return false;
         });
 
-        const totalDiem = myDiemList.reduce((sum, d) => sum + parseFloat(d.diem || 0), 0);
+        const totalDiem = myDiemList.reduce((sum, d) => sum + this._docDiem(d.diem), 0);
         const kpi = myKpi.kpi_diem || 65;
         
         let luongHieuSuat = 0;
