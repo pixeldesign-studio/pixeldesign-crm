@@ -9629,10 +9629,17 @@ const App = {
      }
 
      const loaiLuong = (myRow.loai_luong || role).toLowerCase();
+
+     // KPI lay tu tab NHAN_SU (crm-data) - moi nguoi deu doc duoc, khong lo lot luong.
+     // File luong ca nhan KHONG co cot KPI nao, truoc day doc o do nen luon roi ve so mac dinh.
+     // Thieu cau hinh thi de 0 -> _buildProgressBarHtml se bao "Chua cau hinh KPI",
+     // tot hon la hien mot con so sai.
+     const nsList = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.NHAN_SU).catch(() => []);
+     const nsRow = (nsList || []).find(x => (x.email || '').trim().toLowerCase() === myEmail) || {};
      const myKpi = {
-        kpi_doanh_so: parseFloat((myRow.kpi_doanh_so || '').toString().replace(/,/g, '')) || 66000000,
-        kpi_diem: parseFloat(myRow.kpi_diem) || 65,
-        don_gia_diem: parseFloat((myRow.don_gia_diem || '').toString().replace(/,/g, '')) || 500000
+        kpi_doanh_so: this._parseCurrency(nsRow.kpi_doanh_so || '') || 0,
+        kpi_diem:     this._docDiem(nsRow.kpi_diem),
+        don_gia_diem: this._parseCurrency(nsRow.don_gia_diem || '') || 0
      };
 
      progCont.style.display = 'block';
@@ -9640,10 +9647,16 @@ const App = {
 
      let html = '';
      if (loaiLuong === 'sale') {
-        const [donHangList] = await Promise.all([
-           this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG)
+        // BAY SO 1: gia tien KHONG nam trong DON_HANG, phai ghep tu TIEN_DON.
+        // Thieu buoc ghep nay thi tong_gia_tri = undefined -> doanh so luon ra 0 d.
+        const [donHangList, tienDonRows] = await Promise.all([
+           this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG),
+           this._readSheet(this.session.accessToken, CONFIG.SHEETS.TIEN_DON, 'A:B').catch(() => [])
         ]);
-        
+        const tienDonMap = {};
+        (tienDonRows || []).forEach(r => { if (r.ma_don) tienDonMap[r.ma_don] = r.tong_gia_tri; });
+        donHangList.forEach(d => { if (tienDonMap[d.ma_don] !== undefined) d.tong_gia_tri = tienDonMap[d.ma_don]; });
+
         const saleOrders = donHangList.filter(d => {
            if ((d.sale_phu_trach || '').trim().toLowerCase() !== hoTen) return false;
            const tt = (d.trang_thai || '').toLowerCase();
@@ -9661,9 +9674,12 @@ const App = {
         });
 
         const totalRevenue = saleOrders.reduce((sum, d) => sum + this._tinhSoPhaiThu(d), 0);
-        const kpi = myKpi.kpi_doanh_so || 66000000;
-        
-        html = this._buildProgressBarHtml('Doanh số tháng này', totalRevenue, kpi, true, 0, true);
+
+        if (saleOrders.length > 0 && Object.keys(tienDonMap).length === 0) {
+           html = `<div style="color:#B4453C; font-size:13px;">Không đọc được giá trị đơn hàng (thiếu quyền đọc file TÀI CHÍNH). Nhờ quản lý cấp quyền.</div>`;
+        } else {
+           html = this._buildProgressBarHtml('Doanh số tháng này', totalRevenue, myKpi.kpi_doanh_so, true, 0, true);
+        }
 
      } else if (loaiLuong === 'designer_hieu_suat') {
         const [donHangList, diemList] = await Promise.all([
@@ -9689,14 +9705,13 @@ const App = {
         });
 
         const totalDiem = myDiemList.reduce((sum, d) => sum + this._docDiem(d.diem), 0);
-        const kpi = myKpi.kpi_diem || 65;
-        
+        const kpi = myKpi.kpi_diem;   // khong dat so mac dinh: sai KPI la sai ky vong luong
+
         let luongHieuSuat = 0;
-        if (kpi > 0) {
+        if (kpi > 0 && myKpi.don_gia_diem > 0) {
            const ptHieuSuat = totalDiem / kpi;
            if (ptHieuSuat >= 0.8) {
-              const donGia = myKpi.don_gia_diem || 500000;
-              luongHieuSuat = 0.04 * donGia * ptHieuSuat * totalDiem;
+              luongHieuSuat = 0.04 * myKpi.don_gia_diem * ptHieuSuat * totalDiem;
            }
         }
         
