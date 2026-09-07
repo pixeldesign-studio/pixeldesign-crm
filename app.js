@@ -5262,9 +5262,14 @@ const App = {
       }
 
       progressHtml += `</div>`;
+
+      // Soat cau hinh truoc khi hien so - de canh bao nam ngay tren dau bang luong
+      const nhanSuList = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.NHAN_SU).catch(() => []);
+      this._canhBaoLuongHienTai = this._soatCauHinhLuong(cauHinhList, nhanSuList, validDiemInMonth);
+
       const progCont = document.getElementById('bl-progress-container');
       if (progCont) {
-         progCont.innerHTML = progressHtml;
+         progCont.innerHTML = this._htmlCanhBaoLuong(this._canhBaoLuongHienTai) + progressHtml;
          progCont.style.display = 'block';
       }
 
@@ -5401,13 +5406,89 @@ const App = {
     }
   },
 
+  // Soat cau hinh luong truoc khi tin bat ky con so nao.
+  // Cac loi duoi day deu tung xay ra that va deu IM LANG - khong bao loi, chi ra so sai.
+  // Tra ve mang cac canh bao dang { muc: 'do'|'vang', chu: '...' }
+  _soatCauHinhLuong(cauHinhList, nhanSuList, diemTrongThang) {
+    const canhBao = [];
+    const ch = cauHinhList || [], ns = nhanSuList || [];
+
+    // 1. Hai nguoi dung chung mot file luong -> ghi de len nhau + lo luong
+    const theoFile = {};
+    ch.forEach(n => {
+      const id = (n.file_ca_nhan_id || '').trim();
+      if (!id) return;
+      (theoFile[id] = theoFile[id] || []).push((n.ho_ten || n.email || '?').trim());
+    });
+    Object.keys(theoFile).forEach(id => {
+      if (theoFile[id].length > 1) {
+        canhBao.push({ muc: 'do', chu: `${theoFile[id].join(' và ')} đang dùng CHUNG một file lương. Lương sẽ ghi đè lên nhau và người này đọc được lương người kia.` });
+      }
+    });
+
+    // 2. Thieu file ca nhan -> chot luong bo qua, khong bao gi
+    ch.forEach(n => {
+      if (!(n.file_ca_nhan_id || '').trim() && (n.loai_luong || '').trim().toLowerCase() !== 'admin') {
+        canhBao.push({ muc: 'do', chu: `${(n.ho_ten || n.email || '?').trim()} chưa có file lương cá nhân — bấm chốt lương sẽ bỏ qua người này.` });
+      }
+    });
+
+    // 3. Ten trong DIEM_DESIGNER khong khop ai trong CAU_HINH_LUONG
+    //    (bay tung lam mat 22,3 diem cua Hong Hoa vi ghi duoi ten cu)
+    const tenCauHinh = ch.map(n => (n.ho_ten || '').trim().toLowerCase()).filter(Boolean);
+    const tenLa = [];
+    (diemTrongThang || []).forEach(d => {
+      const t = (d.ten_designer || '').trim();
+      if (!t) return;
+      if (tenCauHinh.indexOf(t.toLowerCase()) === -1 && tenLa.indexOf(t) === -1) tenLa.push(t);
+    });
+    if (tenLa.length > 0) {
+      canhBao.push({ muc: 'do', chu: `Có điểm ghi cho "${tenLa.join('", "')}" nhưng tên này không có trong CẤU HÌNH LƯƠNG. Điểm đó đang không tính cho ai — thường là do tên viết lệch giữa hai bảng.` });
+    }
+
+    // 4. Email trong CAU_HINH_LUONG khong khop email dang nhap trong NHAN_SU
+    const emailNS = ns.map(x => (x.email || '').trim().toLowerCase()).filter(Boolean);
+    ch.forEach(n => {
+      const e = (n.email || '').trim().toLowerCase();
+      if (e && emailNS.length > 0 && emailNS.indexOf(e) === -1) {
+        canhBao.push({ muc: 'vang', chu: `Email ${e} (${(n.ho_ten || '?').trim()}) không khớp email nào trong tab NHÂN SỰ — Thưởng riêng của người này sẽ không được cộng.` });
+      }
+    });
+
+    return canhBao;
+  },
+
+  _htmlCanhBaoLuong(canhBao) {
+    if (!canhBao || canhBao.length === 0) return '';
+    const doNhieu = canhBao.filter(c => c.muc === 'do').length;
+    const nen = doNhieu > 0 ? '#FCE9E9' : '#FFF8E1';
+    const vien = doNhieu > 0 ? '#E0A9A3' : '#F0D090';
+    const chu = doNhieu > 0 ? '#B4453C' : '#8A6D1F';
+    return `
+      <div style="background:${nen}; border:1px solid ${vien}; border-radius:var(--radius-lg); padding:16px 20px; margin-bottom:20px; color:${chu}; font-size:14px; line-height:1.7;">
+        <b>⚠️ Cấu hình lương có ${canhBao.length} vấn đề — kiểm tra trước khi chốt lương:</b>
+        <ul style="margin:8px 0 0 0; padding-left:20px;">
+          ${canhBao.map(c => `<li>${(c.muc === 'do' ? '🔴 ' : '🟡 ') + this._escHtml(c.chu)}</li>`).join('')}
+        </ul>
+      </div>`;
+  },
+
   async chotLuong() {
     if (!this._lastCalculatedSalaryData || this._lastCalculatedSalaryData.length === 0) {
       alert('Không có dữ liệu lương để chốt. Vui lòng ấn Xem trước (và đảm bảo có cấu hình file cá nhân).');
       return;
     }
     const targetMonth = this._currentTargetMonthYear;
-    
+
+    // CHAN: co loi nghiem trong thi khong cho chot - ghi de len nhau la khong lay lai duoc
+    const loiNang = (this._canhBaoLuongHienTai || []).filter(c => c.muc === 'do');
+    if (loiNang.length > 0) {
+      alert(`KHÔNG THỂ CHỐT LƯƠNG — cấu hình đang có ${loiNang.length} lỗi nghiêm trọng:\n\n- `
+            + loiNang.map(c => c.chu).join('\n- ')
+            + `\n\nSửa xong rồi bấm Xem lại bảng lương, sau đó mới chốt được.`);
+      return;
+    }
+
     if (!confirm(`Chốt lương tháng ${targetMonth}? Dữ liệu sẽ ghi vào file cá nhân của nhân viên.`)) {
       return;
     }
