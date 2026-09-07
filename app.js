@@ -5421,14 +5421,17 @@ const App = {
   // Tra ve mang cac canh bao dang { muc: 'do'|'vang', chu: '...' }
   _soatCauHinhLuong(cauHinhList, nhanSuList, diemTrongThang) {
     const canhBao = [];
-    const ch = cauHinhList || [], ns = nhanSuList || [];
+    // Bo qua dong trong va dong huong dan: nhan vien that phai co ten VA email co dau @
+    const ch = (cauHinhList || []).filter(n =>
+         String(n.ho_ten || '').trim() !== '' && String(n.email || '').includes('@'));
+    const ns = nhanSuList || [];
 
     // 1. Hai nguoi dung chung mot file luong -> ghi de len nhau + lo luong
     const theoFile = {};
     ch.forEach(n => {
       const id = (n.file_ca_nhan_id || '').trim();
       if (!id) return;
-      (theoFile[id] = theoFile[id] || []).push((n.ho_ten || n.email || '?').trim());
+      (theoFile[id] = theoFile[id] || []).push(String(n.ho_ten).trim());
     });
     Object.keys(theoFile).forEach(id => {
       if (theoFile[id].length > 1) {
@@ -5439,7 +5442,7 @@ const App = {
     // 2. Thieu file ca nhan -> chot luong bo qua, khong bao gi
     ch.forEach(n => {
       if (!(n.file_ca_nhan_id || '').trim() && (n.loai_luong || '').trim().toLowerCase() !== 'admin') {
-        canhBao.push({ muc: 'do', chu: `${(n.ho_ten || n.email || '?').trim()} chưa có file lương cá nhân — bấm chốt lương sẽ bỏ qua người này.` });
+        canhBao.push({ muc: 'do', chu: `${String(n.ho_ten).trim()} chưa có file lương cá nhân — bấm chốt lương sẽ bỏ qua người này.` });
       }
     });
 
@@ -5462,7 +5465,7 @@ const App = {
     ch.forEach(n => {
       const e = (n.email || '').trim().toLowerCase();
       if (e && emailNS.length > 0 && emailNS.indexOf(e) === -1) {
-        canhBao.push({ muc: 'vang', chu: `Email ${e} (${(n.ho_ten || '?').trim()}) không khớp email nào trong tab NHÂN SỰ — Thưởng riêng của người này sẽ không được cộng.` });
+        canhBao.push({ muc: 'vang', chu: `${String(n.ho_ten).trim()} — email ${e} không khớp email nào trong tab NHÂN SỰ. Thưởng riêng của người này sẽ không được cộng.` });
       }
     });
 
@@ -5472,6 +5475,10 @@ const App = {
   _htmlCanhBaoLuong(canhBao) {
     if (!canhBao || canhBao.length === 0) return '';
     const doNhieu = canhBao.filter(c => c.muc === 'do').length;
+    // Khong bao gio do ra qua 6 dong - dai qua thi khong ai doc, chi gay roi
+    const TOI_DA = 6;
+    const conLai = canhBao.length - TOI_DA;
+    const hienThi = canhBao.slice(0, TOI_DA);
     const nen = doNhieu > 0 ? '#FCE9E9' : '#FFF8E1';
     const vien = doNhieu > 0 ? '#E0A9A3' : '#F0D090';
     const chu = doNhieu > 0 ? '#B4453C' : '#8A6D1F';
@@ -5479,8 +5486,9 @@ const App = {
       <div style="background:${nen}; border:1px solid ${vien}; border-radius:var(--radius-lg); padding:16px 20px; margin-bottom:20px; color:${chu}; font-size:14px; line-height:1.7;">
         <b>⚠️ Cấu hình lương có ${canhBao.length} vấn đề — kiểm tra trước khi chốt lương:</b>
         <ul style="margin:8px 0 0 0; padding-left:20px;">
-          ${canhBao.map(c => `<li>${(c.muc === 'do' ? '🔴 ' : '🟡 ') + this._escHtml(c.chu)}</li>`).join('')}
+          ${hienThi.map(c => `<li>${(c.muc === 'do' ? '🔴 ' : '🟡 ') + this._escHtml(c.chu)}</li>`).join('')}
         </ul>
+        ${conLai > 0 ? `<div style="margin-top:8px; font-size:13px;">…và ${conLai} vấn đề nữa. Sửa các mục trên rồi bấm <b>Xem</b> lại để soát tiếp.</div>` : ''}
       </div>`;
   },
 
