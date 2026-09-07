@@ -847,6 +847,14 @@ const App = {
   // ══════════════════════════════════════════════════════════
 
   /** Tên cột nào được coi là cột ngày. */
+  // Nguoi khong tinh diem (vd tai khoan designer cua chinh chu tich):
+  // van nhan don, van chot diem duoc, nhung khong len bang xep hang hieu suat.
+  _khongTinhDiem(ten) {
+    const t = String(ten || '').trim().toLowerCase();
+    if (!t) return false;
+    return (CONFIG.DESIGNER_KHONG_TINH_DIEM || []).some(x => String(x).trim().toLowerCase() === t);
+  },
+
   _laCotNgay(ten) {
     const t = String(ten || '').toLowerCase();
     return t === 'ngay' || t.startsWith('ngay_') || t.endsWith('_ngay')
@@ -3711,6 +3719,7 @@ const App = {
     // 1. Lọc theo khoảng thời gian, loại điểm, và role
     if (loaiDiem === 'xu_ly' && this._hieuSuatXuLyRows) {
       this._hieuSuatXuLyRows.forEach(r => {
+        if (this._khongTinhDiem(r.ten_designer || r.designer || '')) return;
         const pd = parseDate(r.ngay_ghi_nhan);
         if (!pd) return; // Bỏ qua nếu ngày trống
         if (pd >= startDate && pd <= endDate) {
@@ -3729,6 +3738,7 @@ const App = {
     if (loaiDiem === 'luong' && this._hieuSuatLuongRows) {
       const mapNgayDuyet = this._hieuSuatNgayDuyetMap || {};
       this._hieuSuatLuongRows.forEach(r => {
+        if (this._khongTinhDiem(r.ten_designer || r.designer || '')) return;
         const chuoiNgay = mapNgayDuyet[r.ma_don] || '';
         if (!chuoiNgay) {
           if (r.ma_don && !donThieuNgayDuyet.includes(r.ma_don)) donThieuNgayDuyet.push(r.ma_don);
@@ -3757,8 +3767,8 @@ const App = {
 
     xuLyRows.forEach(r => {
       const t = (r.ten_designer || r.designer || r.ho_ten || r.ten || '').trim();
-      if (!t) return;
-      
+      if (!t || this._khongTinhDiem(t)) return;
+
       addDesignerIfMissing(t);
       const score = parseFloat((r.diem_tam || '').toString().replace(/,/g, '.'));
       if (!isNaN(score) && score > 0) {
@@ -3769,8 +3779,8 @@ const App = {
 
     luongRows.forEach(r => {
       const t = (r.ten_designer || r.designer || r.ho_ten || r.ten || '').trim();
-      if (!t) return;
-      
+      if (!t || this._khongTinhDiem(t)) return;
+
       addDesignerIfMissing(t);
       const score = this._docDiem(r.diem);
       if (score > 0) {
@@ -5440,6 +5450,7 @@ const App = {
     (diemTrongThang || []).forEach(d => {
       const t = (d.ten_designer || '').trim();
       if (!t) return;
+      if (this._khongTinhDiem(t)) return;   // nguoi khong tinh diem thi khong can cau hinh luong
       if (tenCauHinh.indexOf(t.toLowerCase()) === -1 && tenLa.indexOf(t) === -1) tenLa.push(t);
     });
     if (tenLa.length > 0) {
@@ -6344,7 +6355,7 @@ const App = {
   },
 
   async _openSuaDiemXuLyModal(maDon) {
-    if (this.session?.role !== 'admin') return;
+    if (!['admin', 'sale'].includes(this.session?.role)) return;
     const don = (this._kanbanData || []).find(d => d.ma_don === maDon);
     if (!don) return;
 
@@ -6507,7 +6518,7 @@ const App = {
 
   _renderChotDiemRows() {
     if (!this._chotDiemState) return '';
-    const allDesigners = (this._nhanSuList || []).filter(n => n.vai_tro === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
+    const allDesigners = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     
     return this._chotDiemState.rows.map((row, idx) => {
       const options = `<option value="">-- Chọn designer --</option>` + 
@@ -6707,7 +6718,7 @@ const App = {
   },
 
   async _openSuaDiemLuongModal(maDon) {
-    if (this.session?.role !== 'admin') return;
+    if (!['admin', 'sale'].includes(this.session?.role)) return;
     const don = (this._kanbanData || []).find(d => d.ma_don === maDon);
     if (!don) return;
 
@@ -6897,7 +6908,7 @@ const App = {
 
   _renderChotLuongRows() {
     if (!this._chotLuongState) return '';
-    const allDesigners = (this._nhanSuList || []).filter(n => n.vai_tro === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
+    const allDesigners = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     
     return this._chotLuongState.rows.map((row, idx) => {
       const options = `<option value="">-- Chọn designer --</option>` + 
@@ -7299,7 +7310,7 @@ const App = {
     const assignedDesigners = this._kanbanDesignerMap[maDon] || [];
     const designerScores = this._kanbanDesignerScoreMap?.[maDon] || {};
     const designerTempScores = this._kanbanDiemXuLyMap?.[maDon] || {};
-    const designerStaff = (this._nhanSuList || []).filter(n => n.vai_tro === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
+    const designerStaff = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     const availableDesigners = designerStaff.filter(d => d && !assignedDesigners.includes(d));
 
     let designerHtml = '';
@@ -7338,7 +7349,7 @@ const App = {
         }
       }
       
-      if (don.da_ghi_diem_xu_ly === 'yes' && this.session?.role === 'admin') {
+      if (don.da_ghi_diem_xu_ly === 'yes' && ['admin', 'sale'].includes(this.session?.role)) {
         chotDiemBtnHtml += ` <button type="button" class="btn btn-sm btn-outline" style="border-color:#3498db; color:#3498db;" onclick="App._openSuaDiemXuLyModal('${this._escHtml(don.ma_don)}')">Sửa lại điểm xử lý</button>`;
       }
 
@@ -7351,7 +7362,7 @@ const App = {
           : `<button type="button" class="btn btn-sm btn-secondary" style="background:#8E44AD; color:#FFF; border-color:#8E44AD;" data-chot-luong-ma="${this._escHtml(don.ma_don)}" onclick="App._openChotLuongModal('${this._escHtml(don.ma_don)}')">Chốt điểm lương</button>`;
       }
       
-      if (don.da_ghi_diem_luong === 'yes' && this.session?.role === 'admin') {
+      if (don.da_ghi_diem_luong === 'yes' && ['admin', 'sale'].includes(this.session?.role)) {
         chotLuongBtnHtml += ` <button type="button" class="btn btn-sm btn-outline" style="border-color:#e74c3c; color:#e74c3c;" onclick="App._confirmAndOpenSuaDiemLuongModal('${this._escHtml(don.ma_don)}')">Sửa lại điểm lương</button>`;
       }
 
@@ -9329,7 +9340,7 @@ const App = {
     const assigned = Array.from(document.querySelectorAll('input[name="assigned_designer"]')).map(el => el.value);
     const selectEl = document.getElementById('det-designer-select');
     if (!selectEl) return;
-    const allDesigners = (this._nhanSuList || []).filter(n => n.vai_tro === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
+    const allDesigners = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     const available = allDesigners.filter(d => d && !assigned.includes(d));
     selectEl.innerHTML = `<option value="">+ Thêm designer...</option>` + available.map(d => `<option value="${this._escHtml(d)}">${this._escHtml(d)}</option>`).join('');
   },
