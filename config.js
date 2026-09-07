@@ -82,6 +82,17 @@ const CONFIG = {
   ],
 
   // ──────────────────────────────────────────────────────────
+  // DESIGNER KHÔNG TÍNH ĐIỂM
+  // Người trong danh sách này VẪN chọn được làm designer phụ trách,
+  // vẫn chốt điểm được, nhưng KHÔNG xuất hiện trong bảng Hiệu suất Designer
+  // và không bị báo lỗi "chưa có cấu hình lương".
+  // Ghi đúng TÊN như trong tab NHAN_SU. Thêm/bớt thì sửa dòng dưới.
+  // ──────────────────────────────────────────────────────────
+  DESIGNER_KHONG_TINH_DIEM: [
+    'Mr Vũ',
+  ],
+
+  // ──────────────────────────────────────────────────────────
   // CÀI ĐẶT KHÁC
   // ──────────────────────────────────────────────────────────
   APP_NAME:    'PIXELDESIGN CRM',
@@ -98,3 +109,4 @@ Object.freeze(CONFIG);
 Object.freeze(CONFIG.SHEETS);
 Object.freeze(CONFIG.ROLES);
 Object.freeze(CONFIG.ETSY_USERS);
+Object.freeze(CONFIG.DESIGNER_KHONG_TINH_DIEM);
