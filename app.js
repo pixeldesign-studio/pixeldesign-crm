@@ -6489,12 +6489,12 @@ const App = {
     overlay.id = 'chot-diem-overlay';
     overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     overlay.innerHTML = `
-      <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <div class="kb-detail-modal" style="max-width: 560px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
         <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
           <h2 class="kb-detail-title" style="margin:0; font-size:18px;">Chốt điểm xử lý — ${this._escHtml(maDon)}</h2>
           <button class="kb-detail-close" onclick="App._closeChotDiemModal()" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--clr-text);">✕</button>
         </div>
-        <div class="kb-detail-body" style="padding: 16px; overflow-y:auto;">
+        <div class="kb-detail-body" style="display:block; padding: 16px; overflow-y:auto; overflow-x:hidden;">
           <div id="chot-diem-rows" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
             ${this._renderChotDiemRows()}
           </div>
@@ -6528,17 +6528,25 @@ const App = {
     if (!this._chotDiemState) return '';
     const allDesigners = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     
-    return this._chotDiemState.rows.map((row, idx) => {
+    const tieuDe = `
+      <div style="display:flex; gap:8px; align-items:center; font-size:12px; font-weight:600;
+                  color:var(--clr-text-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:2px;">
+        <span style="flex:1 1 120px; min-width:0;">Designer</span>
+        <span style="flex:0 0 88px; text-align:center;">Điểm</span>
+        <span style="flex:0 0 36px;"></span>
+      </div>`;
+
+    return tieuDe + this._chotDiemState.rows.map((row, idx) => {
       const options = `<option value="">-- Chọn designer --</option>` + 
         allDesigners.map(d => `<option value="${this._escHtml(d)}" ${d === row.designer ? 'selected' : ''}>${this._escHtml(d)}</option>`).join('');
       
       return `
-        <div class="chot-diem-row" data-index="${idx}" style="display:flex; gap:8px; align-items:center;">
-          <select class="form-input chot-diem-designer" style="flex:1; min-width:200px;" onchange="App._updateChotDiemState(${idx}, 'designer', this.value)">
+        <div class="chot-diem-row" data-index="${idx}" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <select class="form-input chot-diem-designer" style="flex:1 1 120px; min-width:0; width:auto;" onchange="App._updateChotDiemState(${idx}, 'designer', this.value)">
             ${options}
           </select>
-          <input type="text" class="form-input chot-diem-score" value="${this._escHtml(row.score)}" placeholder="Điểm" style="width:80px;" oninput="App._updateChotDiemState(${idx}, 'score', this.value)" />
-          <button class="btn btn-ghost btn-sm" onclick="App._removeChotDiemRow(${idx})" style="color:#E74C3C; padding:0 8px; border:none; background:none;">✕</button>
+          <input type="text" inputmode="decimal" class="form-input chot-diem-score" value="${this._escHtml(row.score)}" placeholder="Điểm" style="flex:0 0 88px; width:88px; text-align:center; font-weight:600;" oninput="App._updateChotDiemState(${idx}, 'score', this.value)" />
+          <button class="btn btn-ghost btn-sm" title="Xoá dòng này" onclick="App._removeChotDiemRow(${idx})" style="flex:0 0 auto; color:#E74C3C; width:36px; height:36px; padding:0; border:none; background:none; font-size:16px; line-height:1;">✕</button>
         </div>
       `;
     }).join('');
@@ -6750,12 +6758,12 @@ const App = {
       overlay.id = 'chot-luong-overlay';
       overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
       overlay.innerHTML = `
-        <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+        <div class="kb-detail-modal" style="max-width: 560px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
           <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
             <h2 class="kb-detail-title" style="margin:0; font-size:18px;">Sửa lại điểm lương — ${this._escHtml(maDon)}</h2>
             <button class="kb-detail-close" onclick="App._closeChotLuongModal()" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--clr-text);">✕</button>
           </div>
-          <div class="kb-detail-body" style="padding: 16px; overflow-y:auto;">
+          <div class="kb-detail-body" style="display:block; padding: 16px; overflow-y:auto; overflow-x:hidden;">
             <div id="chot-luong-rows" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;">
               ${this._renderChotLuongRows()}
             </div>
@@ -6887,12 +6895,12 @@ const App = {
     overlay.id = 'chot-luong-overlay';
     overlay.className = 'kb-overlay' + (this.currentPage === 'kanban' ? ' kb-kanban' : '');   // kb-kanban: chi khi mo tu man Kanban
     overlay.innerHTML = `
-      <div class="kb-detail-modal" style="max-width: 500px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <div class="kb-detail-modal" style="max-width: 560px; background:var(--clr-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; max-height:90vh; margin: 5vh auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
         <div class="kb-detail-header" style="padding:16px; border-bottom:1px solid var(--clr-border); display:flex; justify-content:space-between; align-items:center;">
           <h2 class="kb-detail-title" style="margin:0; font-size:18px;">Chốt điểm lương — ${this._escHtml(maDon)}</h2>
           <button class="kb-detail-close" onclick="App._closeChotLuongModal()" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--clr-text);">✕</button>
         </div>
-        <div class="kb-detail-body" style="padding: 16px; overflow-y:auto;">
+        <div class="kb-detail-body" style="display:block; padding: 16px; overflow-y:auto; overflow-x:hidden;">
           <div id="chot-luong-rows" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;">
             ${this._renderChotLuongRows()}
           </div>
@@ -6918,17 +6926,25 @@ const App = {
     if (!this._chotLuongState) return '';
     const allDesigners = (this._nhanSuList || []).filter(n => String(n.vai_tro || '').trim().toLowerCase() === 'designer').map(n => n.ten || n.ho_ten || n.ten_nhan_vien || n.email || '');
     
-    return this._chotLuongState.rows.map((row, idx) => {
+    const tieuDe = `
+      <div style="display:flex; gap:8px; align-items:center; font-size:12px; font-weight:600;
+                  color:var(--clr-text-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:2px;">
+        <span style="flex:1 1 120px; min-width:0;">Designer</span>
+        <span style="flex:0 0 88px; text-align:center;">Điểm</span>
+        <span style="flex:0 0 36px;"></span>
+      </div>`;
+
+    return tieuDe + this._chotLuongState.rows.map((row, idx) => {
       const options = `<option value="">-- Chọn designer --</option>` + 
         allDesigners.map(d => `<option value="${this._escHtml(d)}" ${d === row.designer ? 'selected' : ''}>${this._escHtml(d)}</option>`).join('');
       
       return `
-        <div class="chot-luong-row" data-index="${idx}" style="display:flex; gap:8px; align-items:center;">
-          <select class="form-input chot-luong-designer" style="flex:1; min-width:200px;" onchange="App._updateChotLuongState(${idx}, 'designer', this.value)">
+        <div class="chot-luong-row" data-index="${idx}" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <select class="form-input chot-luong-designer" style="flex:1 1 120px; min-width:0; width:auto;" onchange="App._updateChotLuongState(${idx}, 'designer', this.value)">
             ${options}
           </select>
-          <input type="number" step="any" min="0" class="form-input chot-luong-score" value="${this._escHtml(row.score)}" placeholder="Điểm" style="width:80px;" oninput="App._updateChotLuongState(${idx}, 'score', this.value)" />
-          <button class="btn btn-ghost btn-sm" onclick="App._removeChotLuongRow(${idx})" style="color:#E74C3C; padding:0 8px; border:none; background:none;">✕</button>
+          <input type="number" step="any" min="0" inputmode="decimal" class="form-input chot-luong-score" value="${this._escHtml(row.score)}" placeholder="Điểm" style="flex:0 0 88px; width:88px; text-align:center; font-weight:600;" oninput="App._updateChotLuongState(${idx}, 'score', this.value)" />
+          <button class="btn btn-ghost btn-sm" title="Xoá dòng này" onclick="App._removeChotLuongRow(${idx})" style="flex:0 0 auto; color:#E74C3C; width:36px; height:36px; padding:0; border:none; background:none; font-size:16px; line-height:1;">✕</button>
         </div>
       `;
     }).join('');
@@ -6954,9 +6970,22 @@ const App = {
     const summaryDiv = document.getElementById('chot-luong-summary');
     if (summaryDiv) {
       const isOver = total > diemDon;
-      let html = `<div style="font-weight:600; font-size:14px; color:var(--clr-text);">Tổng điểm designer: <span style="color:${isOver ? '#e74c3c' : '#2ecc71'};">${Number(total.toFixed(2))}</span> / Điểm đơn: ${Number(diemDon.toFixed(2))}</div>`;
+      const conLai = Number((diemDon - total).toFixed(2));
+      let html = `
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:14px;">
+          <span style="color:var(--clr-text-muted);">Điểm đơn</span>
+          <b style="font-size:16px;">${Number(diemDon.toFixed(2))}</b>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:14px; margin-top:6px;">
+          <span style="color:var(--clr-text-muted);">Đã chia cho designer</span>
+          <b style="font-size:16px; color:${isOver ? '#e74c3c' : 'var(--clr-text)'};">${Number(total.toFixed(2))}</b>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:14px; margin-top:6px; padding-top:6px; border-top:1px dashed var(--clr-border-light);">
+          <span style="color:var(--clr-text-muted);">Còn lại</span>
+          <b style="font-size:16px; color:${conLai === 0 ? '#2ecc71' : (conLai < 0 ? '#e74c3c' : '#9C7E5E')};">${conLai}</b>
+        </div>`;
       if (isOver) {
-        html += `<div style="color:#e74c3c; font-size:12px; font-weight:600; margin-top:4px;">⚠ Tổng điểm designer vượt quá điểm đơn. Kiểm tra lại.</div>`;
+        html += `<div style="color:#e74c3c; font-size:13px; font-weight:600; margin-top:8px;">⚠ Đã chia vượt quá điểm đơn ${Math.abs(conLai)} điểm — không lưu được.</div>`;
       }
       summaryDiv.innerHTML = html;
     }
