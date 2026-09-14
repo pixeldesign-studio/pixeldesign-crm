@@ -2885,6 +2885,7 @@ const App = {
     let tongThuNoCu = 0;
     let congNo = 0;
     let soDon = 0;
+    let soDonHuy = 0;   // đếm riêng, không gộp vào số đơn
 
     const dailyMap = {};
     this._doanhThuCurrentFilteredData = [];
@@ -2949,33 +2950,46 @@ const App = {
        if (!ngayLenDonDate) return;
 
        if (ngayLenDonDate >= startDate && ngayLenDonDate <= endDate) {
-          soDon++;
-          const soPhaiThu = this._tinhSoPhaiThu(don);
-          tongDoanhThu += soPhaiThu;
+          // ĐƠN HỦY xử lý khác đơn thường:
+          //  - Không còn công nợ để đòi  -> không cộng vào công nợ
+          //  - Doanh thu chỉ là tiền công ty THỰC GIỮ LẠI:
+          //      hủy-giữ cọc  -> bằng số cọc đã thu
+          //      hủy-hoàn cọc -> bằng 0 (vì có giao dịch hoàn cọc âm bù lại)
+          const laDonHuy = String(don.trang_thai || '').trim().toLowerCase().startsWith('hủy');
 
-          let daThucThuThatSu = 0;
+          let daThucThuThatSu = 0;   // chỉ các khoản khách chuyển vào (dương)
           let daThucThuFilter = 0;
+          let tienThucNhan = 0;      // cộng cả khoản âm (hoàn cọc) => tiền thật còn lại
           const gdCuaDon = this._doanhThuData.filter(r => r.ma_don === don.ma_don);
           gdCuaDon.forEach(r => {
              const isTip = r.loai && r.loai.toLowerCase() === 'tip';
-             if (r.so_tien > 0 && !isTip) {
+             if (isTip) return;
+             tienThucNhan += r.so_tien;
+             if (r.so_tien > 0) {
                 daThucThuThatSu += r.so_tien;
                 if (fLoai === 'all' || r.loai === fLoai) {
                    daThucThuFilter += r.so_tien;
                 }
              }
           });
-          
+
+          const soPhaiThu = this._tinhSoPhaiThu(don);
+          const doanhThuDon = laDonHuy ? Math.max(0, tienThucNhan) : soPhaiThu;
+
+          if (laDonHuy) soDonHuy++; else soDon++;
+          tongDoanhThu += doanhThuDon;
           tongThuDonKy += daThucThuFilter;
 
-          let no = soPhaiThu - daThucThuThatSu;
-          if (no > 0) congNo += no;
+          if (!laDonHuy) {
+             const no = soPhaiThu - daThucThuThatSu;
+             if (no > 0) congNo += no;
+          }
 
-          if (don.da_an !== 'yes' && this._parseCurrency(don.tong_gia_tri) <= 0) {
+          if (!laDonHuy && don.da_an !== 'yes' && this._parseCurrency(don.tong_gia_tri) <= 0) {
              if (!this._zeroValueOrdersFiltered) this._zeroValueOrdersFiltered = [];
              this._zeroValueOrdersFiltered.push(don);
           }
-          
+
           if (don.da_an !== 'yes') {
              const d = ngayLenDonDate.getDate();
              const m = ngayLenDonDate.getMonth() + 1;
@@ -2984,7 +2998,7 @@ const App = {
              if (!trendMap[dateStr]) {
                 trendMap[dateStr] = { date: dateStr, parsedDate: ngayLenDonDate, total: 0, count: 0 };
              }
-             trendMap[dateStr].total += soPhaiThu;
+             trendMap[dateStr].total += doanhThuDon;
              trendMap[dateStr].count += 1;
           }
        }
@@ -3114,6 +3128,7 @@ const App = {
           <div style="background:linear-gradient(135deg, #EDE7F6, #F3EFFB); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
             <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Số đơn</div>
             <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatNumber(soDon)}</div>
+            ${soDonHuy > 0 ? `<div style="font-size:11px; color:var(--clr-text-muted); margin-top:8px; font-weight:500;">Không tính ${this._formatNumber(soDonHuy)} đơn đã hủy</div>` : ''}
           </div>
         </div>
 
