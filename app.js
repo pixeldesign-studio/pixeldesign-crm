@@ -1561,7 +1561,8 @@ const App = {
       </div>
       <div class="form-group">
         <label class="form-label" for="f-sale">Sale phụ trách</label>
-        <select class="form-select" id="f-sale">${saleOpts}</select>
+        <select class="form-select" id="f-sale" onchange="App._capNhatPhanSaleChinh('f')">${saleOpts}</select>
+        ${this._htmlKhungChiaSale('f', this._dsTenSaleChon(nhanSuList).length ? this._dsTenSaleChon(nhanSuList) : [tenDangNhap].filter(Boolean), [])}
       </div>
       <div class="form-group">
         <label class="form-label" for="f-diem-don">Điểm đơn</label>
@@ -1889,6 +1890,14 @@ const App = {
       return;
     }
 
+    // ── 2b. Chia doanh số sale (06/10/2026) ──
+    const kqChia = this._docChiaSale('f');
+    if (kqChia.loi) {
+      this._showToast(kqChia.loi, 'error', 6000);
+      return;
+    }
+    const chiaDoanhSo = kqChia.chuoi || '';
+
     // ── 3. Check Trùng Lặp (Khách Mới) ──
     if (loaiKhach === 'moi') {
       const tkLower = tenKhach.toLowerCase();
@@ -1972,11 +1981,13 @@ const App = {
       );
       const hData = await headerRes.json();
       const headers = (hData.values || [[]])[0] || [];
+      // Đơn có chia doanh số -> bảo đảm có cột chia_doanh_so (tự thêm nếu thiếu)
+      if (chiaDoanhSo) await this._baoDamCotDonHang(headers, 'chia_doanh_so');
       
       const newOrderRow = new Array(headers.length).fill('');
       const dataMap = {
         ma_don: maDon, ma_kh: maKh, ten_khach: tenKhach, brand: brand, nganh: nganh, item: item, brief: brief, link_anh: linkAnh,
-        ngay_len_don: ngayLenDon, ngay_het_han: ngayHetHan, cot_kanban: 'Đơn mới', sale_phu_trach: salePhuTrach, diem_don: diemDon,
+        ngay_len_don: ngayLenDon, ngay_het_han: ngayHetHan, cot_kanban: 'Đơn mới', sale_phu_trach: salePhuTrach, chia_doanh_so: chiaDoanhSo, diem_don: diemDon,
         tong_gia_tri: tongGiaTri || 0, tien_coc: tiencoc, tiencoc: tiencoc, cong_no: congNo, trang_thai: 'đang chạy', don_cha: donCha,
         fanpage: fanpage, zalo: zalo, sdt: sdt, ngay_duyet_mau: '', 
         ngay_thu_du: (tongGiaTri > 0 && tiencoc >= (tongGiaTri || 0)) ? ngayLenDon : ''
@@ -2852,6 +2863,193 @@ const App = {
     if (giaTriGiam < 0) return 0;
     if (giaTriGiam > tongGiaTri) return tongGiaTri; // Max discount is 100%
     return giaTriGiam;
+  },
+
+  // ════════════════════════════════════════════════════════════
+  // CHIA DOANH SỐ SALE                              (thêm 06/10/2026)
+  // ────────────────────────────────────────────────────────────
+  // Cột chia_doanh_so trong DON_HANG, ghi dạng dễ đọc:
+  //     "Lan: 60% | Hoa: 40%"      (người đầu = sale_phu_trach)
+  // Ô TRỐNG = 100% cho sale_phu_trach -> đơn cũ tính y như trước.
+  // Ghi sai (tổng khác 100%...) cũng quay về 100% sale_phu_trach.
+  // Dùng cho: Hiệu suất sale, Bảng lương (KPI + thưởng), thanh KPI.
+  // ════════════════════════════════════════════════════════════
+  _phanChiaSale(don) {
+    const chinh = (don?.sale_phu_trach || '').toString().trim();
+    const raw = (don?.chia_doanh_so || '').toString().trim();
+    const macDinh = chinh ? [{ ten: chinh, tile: 1 }] : [];
+    if (!raw) return macDinh;
+    const ds = [];
+    raw.split('|').forEach(p => {
+      const m = p.trim().match(/^(.+?)\s*:\s*([\d.,]+)\s*%?$/);
+      if (m) ds.push({ ten: m[1].trim(), pt: parseFloat(m[2].replace(',', '.')) });
+    });
+    const tong = ds.reduce((t, x) => t + (x.pt || 0), 0);
+    if (!ds.length || ds.some(x => !(x.pt > 0)) || Math.abs(tong - 100) > 0.01) {
+      console.warn('[ChiaSale] Đơn', don?.ma_don, 'có chia_doanh_so không hợp lệ:', raw, '-> tính 100% cho sale phụ trách');
+      return macDinh;
+    }
+    return ds.map(x => ({ ten: x.ten, tile: x.pt / 100 }));
+  },
+
+  /** Tỉ lệ (0..1) của một sale trong đơn. */
+  _tiLeSale(don, hoTen) {
+    const t = (hoTen || '').toString().trim().toLowerCase();
+    if (!t) return 0;
+    return this._phanChiaSale(don)
+      .filter(x => x.ten.toLowerCase() === t)
+      .reduce((tong, x) => tong + x.tile, 0);
+  },
+
+  /** Doanh số của một sale trong đơn = số phải thu × tỉ lệ. */
+  _doanhSoCuaSale(don, hoTen) {
+    return this._tinhSoPhaiThu(don) * this._tiLeSale(don, hoTen);
+  },
+
+  /** Chữ hiển thị: "Lan 60% · Hoa 40%", hoặc tên sale nếu không chia. */
+  _moTaChiaSale(don) {
+    const ds = this._phanChiaSale(don);
+    if (ds.length <= 1) return (don?.sale_phu_trach || '');
+    return ds.map(x => `${x.ten} ${Math.round(x.tile * 1000) / 10}%`).join(' · ');
+  },
+
+  /** Danh sách tên sale/admin để chọn. */
+  _dsTenSaleChon(nhanSuList) {
+    const ten = (nhanSuList || [])
+      .filter(p => ['sale', 'admin'].includes((p.vai_tro || '').toString().trim().toLowerCase()))
+      .map(p => (p.ten || p.ho_ten || p.name || '').toString().trim())
+      .filter(Boolean);
+    return [...new Set(ten)];
+  },
+
+  /** Ô chia doanh số (dùng chung cho form lên đơn 'f' và chi tiết đơn 'det'). */
+  _htmlKhungChiaSale(prefix, dsTen, phu, tenChinh = '') {
+    this._dsTenChiaSale = this._dsTenChiaSale || {};
+    this._dsTenChiaSale[prefix] = dsTen || [];
+    const dong = (phu || []).map(x => this._htmlDongChiaSale(prefix, x.ten, x.pt)).join('');
+    const du = (phu || []).length >= 2;
+    // Dòng "sale chính nhận x%" hiện ngay khi mở đơn đã chia
+    let ghiChu = '';
+    if ((phu || []).length) {
+      const conLai = Math.round((100 - phu.reduce((t, x) => t + (parseFloat(x.pt) || 0), 0)) * 100) / 100;
+      ghiChu = `${this._escHtml(tenChinh || 'Sale chính')} (sale chính) nhận <b style="color:var(--clr-text);">${conLai}%</b> · tổng 100%`;
+    }
+    return `
+      <div id="${prefix}-chia-rows" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">${dong}</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-top:6px;">
+        <button type="button" id="${prefix}-chia-add" onclick="App._themDongChiaSale('${prefix}')"
+          style="${du ? 'display:none;' : ''} background:none; border:none; padding:4px 0; cursor:pointer; color:var(--clr-accent); font-size:13px; font-weight:600;">+ Chia doanh số với sale khác</button>
+        <span id="${prefix}-chia-note" style="font-size:12.5px; color:var(--clr-text-muted);">${ghiChu}</span>
+      </div>`;
+  },
+
+  _htmlDongChiaSale(prefix, tenChon = '', pt = '') {
+    const ds = (this._dsTenChiaSale && this._dsTenChiaSale[prefix]) || [];
+    const dsDu = tenChon && !ds.includes(tenChon) ? [tenChon, ...ds] : ds;
+    const opts = `<option value="">— Chọn sale —</option>` + dsDu.map(t =>
+      `<option value="${this._escHtml(t)}"${t === tenChon ? ' selected' : ''}>${this._escHtml(t)}</option>`).join('');
+    return `
+      <div class="chia-sale-row" style="display:flex; gap:8px; align-items:center;">
+        <select class="form-select chia-sale-ten" style="flex:1; min-width:0;" onchange="App._capNhatPhanSaleChinh('${prefix}')">${opts}</select>
+        <div style="display:flex; align-items:center; gap:4px; width:92px; flex-shrink:0;">
+          <input class="form-input chia-sale-so" type="number" min="1" max="99" step="1" inputmode="decimal"
+            value="${pt === '' ? '' : this._escHtml(String(pt))}" placeholder="%" style="width:64px; text-align:right;"
+            oninput="App._capNhatPhanSaleChinh('${prefix}')"/>
+          <span style="color:var(--clr-text-muted);">%</span>
+        </div>
+        <button type="button" title="Bỏ sale này" onclick="this.closest('.chia-sale-row').remove(); App._capNhatPhanSaleChinh('${prefix}')"
+          style="width:30px; height:30px; flex-shrink:0; border:none; border-radius:8px; background:rgba(0,0,0,0.05); cursor:pointer; color:#B4453C; font-size:14px;">✕</button>
+      </div>`;
+  },
+
+  _themDongChiaSale(prefix) {
+    const khung = document.getElementById(`${prefix}-chia-rows`);
+    if (!khung || khung.querySelectorAll('.chia-sale-row').length >= 2) return;
+    khung.insertAdjacentHTML('beforeend', this._htmlDongChiaSale(prefix));
+    this._capNhatPhanSaleChinh(prefix);
+  },
+
+  /** Cập nhật dòng "Sale chính nhận: x%" + ẩn/hiện nút thêm. */
+  _capNhatPhanSaleChinh(prefix) {
+    const khung = document.getElementById(`${prefix}-chia-rows`);
+    const note = document.getElementById(`${prefix}-chia-note`);
+    const nut  = document.getElementById(`${prefix}-chia-add`);
+    if (!khung) return;
+    const rows = [...khung.querySelectorAll('.chia-sale-row')];
+    if (nut) nut.style.display = rows.length >= 2 ? 'none' : '';
+    if (!note) return;
+    if (!rows.length) { note.textContent = ''; return; }
+    const tongPhu = rows.reduce((t, r) => t + (parseFloat((r.querySelector('.chia-sale-so')?.value || '').replace(',', '.')) || 0), 0);
+    const chinh = document.getElementById(`${prefix}-sale`)?.value || 'Sale chính';
+    const conLai = Math.round((100 - tongPhu) * 100) / 100;
+    if (conLai <= 0) {
+      note.innerHTML = `<span style="color:#B4453C; font-weight:600;">Tổng sale phụ đã ${tongPhu}% — sale chính phải còn trên 0%</span>`;
+    } else {
+      note.innerHTML = `${this._escHtml(chinh)} (sale chính) nhận <b style="color:var(--clr-text);">${conLai}%</b> · tổng 100%`;
+    }
+  },
+
+  /**
+   * Đọc ô chia doanh số. Trả về { loi, saleChinh, chuoi }.
+   * chuoi = '' khi không chia (100% sale chính).
+   */
+  _docChiaSale(prefix) {
+    const saleChinh = (document.getElementById(`${prefix}-sale`)?.value || '').trim();
+    const khung = document.getElementById(`${prefix}-chia-rows`);
+    const rows = khung ? [...khung.querySelectorAll('.chia-sale-row')] : [];
+    const phu = [];
+    for (const r of rows) {
+      const ten = (r.querySelector('.chia-sale-ten')?.value || '').trim();
+      const raw = (r.querySelector('.chia-sale-so')?.value || '').toString().trim().replace(',', '.');
+      if (!ten && !raw) continue;                         // dòng bỏ trống -> bỏ qua
+      if (!ten) return { loi: 'Có dòng chia doanh số chưa chọn sale.' };
+      const pt = parseFloat(raw);
+      if (!(pt > 0) || pt >= 100) return { loi: `Tỉ lệ của ${ten} phải lớn hơn 0% và nhỏ hơn 100%.` };
+      phu.push({ ten, pt: Math.round(pt * 100) / 100 });
+    }
+    if (!phu.length) return { loi: '', saleChinh, chuoi: '' };
+    if (!saleChinh) return { loi: 'Chưa chọn sale phụ trách (sale chính).' };
+    const tatCa = [saleChinh.toLowerCase(), ...phu.map(x => x.ten.toLowerCase())];
+    if (new Set(tatCa).size !== tatCa.length) return { loi: 'Một sale bị chọn 2 lần trong phần chia doanh số.' };
+    const tongPhu = phu.reduce((t, x) => t + x.pt, 0);
+    const ptChinh = Math.round((100 - tongPhu) * 100) / 100;
+    if (ptChinh <= 0) return { loi: 'Tổng tỉ lệ sale phụ phải nhỏ hơn 100% (sale chính phải còn phần).' };
+    const chuoi = [`${saleChinh}: ${ptChinh}%`, ...phu.map(x => `${x.ten}: ${x.pt}%`)].join(' | ');
+    return { loi: '', saleChinh, chuoi };
+  },
+
+  /** Bảo đảm DON_HANG có cột tenCot ở dòng 1; thiếu thì tự thêm vào ô trống kế tiếp. */
+  async _baoDamCotDonHang(headers, tenCot) {
+    let idx = headers.findIndex(h => (h || '').toString().trim().toLowerCase() === tenCot);
+    if (idx !== -1) return idx;
+    const trong = headers.findIndex(h => !(h || '').toString().trim());
+    idx = trong !== -1 ? trong : headers.length;
+    try {
+      await this._writeSheet(CONFIG.SHEETS.DON_HANG, `${this._colIndexToLetter(idx)}1`, [[tenCot]]);
+    } catch (e) {
+      throw new Error(`Bảng DON_HANG chưa có cột "${tenCot}" và app không tự thêm được (${e.message}). Nhờ admin gõ "${tenCot}" vào ô trống đầu tiên ở dòng 1 của DON_HANG.`);
+    }
+    headers[idx] = tenCot;
+    console.log(`[ChiaSale] Đã thêm cột ${tenCot} vào DON_HANG, cột ${this._colIndexToLetter(idx)}`);
+    return idx;
+  },
+
+  /** Ô sale phụ trách + chia doanh số trong chi tiết đơn. */
+  _htmlChiaSaleChiTiet(don) {
+    const dsTen = this._dsTenSaleChon(this._nhanSuList);
+    const chinh = (don.sale_phu_trach || '').trim();
+    const dsChon = chinh && !dsTen.includes(chinh) ? [chinh, ...dsTen] : dsTen;
+    const opts = `<option value="">— Chọn sale —</option>` + dsChon.map(t =>
+      `<option value="${this._escHtml(t)}"${t === chinh ? ' selected' : ''}>${this._escHtml(t)}</option>`).join('');
+    const chia = this._phanChiaSale(don);
+    const phu = chia.length > 1
+      ? chia.filter(x => x.ten.toLowerCase() !== chinh.toLowerCase()).map(x => ({ ten: x.ten, pt: Math.round(x.tile * 10000) / 100 }))
+      : [];
+    return `<div class="kb-detail-field-group" style="grid-column:1 / -1;">
+        <label class="kb-detail-label">Sale phụ trách</label>
+        <select class="form-select" id="det-sale" style="font-size:var(--font-size-sm);" onchange="App._capNhatPhanSaleChinh('det')">${opts}</select>
+        ${this._htmlKhungChiaSale('det', dsTen, phu, chinh)}
+      </div>`;
   },
 
   _tinhSoPhaiThu(don) {
@@ -4286,8 +4484,19 @@ const App = {
       // [Đã gỡ bỏ: Lọc ẩn KPI người khác để các sale thi đua]
 
       const kpiDoanhSo = this._parseCurrency(nhanVien.kpi_doanh_so);
-      const saleOrders = validOrdersInMonth.filter(d => (d.sale_phu_trach || '').trim().toLowerCase() === hoTen.toLowerCase());
-      const totalThuongRevenue = saleOrders.reduce((sum, d) => sum + this._tinhSoPhaiThu(d), 0);
+      // [06/10] Tính theo tỉ lệ chia doanh số (đơn không chia = 100% sale phụ trách)
+      const saleOrders = validOrdersInMonth.filter(d => this._tiLeSale(d, hoTen) > 0);
+      const totalThuongRevenue = saleOrders.reduce((sum, d) => sum + this._doanhSoCuaSale(d, hoTen), 0);
+
+      // [06/10] Doanh số LÊN ĐƠN: theo ngày lên đơn, bỏ đơn hủy, chưa cần thu đủ
+      const donLenDon = (this._hsSaleDonHangList || []).filter(d => {
+        const tt = (d.trang_thai || '').toLowerCase();
+        if (tt.includes('hủy') || tt.includes('huy')) return false;
+        const ngLen = parseNgayThuDu((d.ngay_len_don || '').toString());
+        if (!ngLen || isNaN(ngLen.getTime()) || ngLen < startDate || ngLen > endDate) return false;
+        return this._tiLeSale(d, hoTen) > 0;
+      });
+      const doanhSoLenDon = donLenDon.reduce((sum, d) => sum + this._doanhSoCuaSale(d, hoTen), 0);
       
       let ptDat = 0;
       if (kpiDoanhSo > 0) {
@@ -4297,6 +4506,8 @@ const App = {
       salesPerformance.push({
         ten: hoTen,
         doanhSo: totalThuongRevenue,
+        doanhSoLenDon: doanhSoLenDon,
+        soDonLenDon: donLenDon.length,
         kpi: kpiDoanhSo,
         ptDat: ptDat
       });
@@ -4390,7 +4601,8 @@ const App = {
                 <thead>
                   <tr style="background:rgba(0,0,0,0.02); color:var(--clr-text-muted); font-size:12px; text-transform:uppercase; letter-spacing:0.05em; text-align:left;">
                     <th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light);">Tên Sale</th>
-                    <th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">Doanh số riêng</th>
+                    <th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">Doanh số lên đơn</th>
+                    <th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">Doanh số chốt (đã thu đủ)</th>
                     <th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">KPI</th>
                     ${isFullMonth ? '<th style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">% Đạt</th>' : ''}
                   </tr>
@@ -4403,6 +4615,7 @@ const App = {
           html += `
                   <tr class="table-row-hover">
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); font-weight:600; text-align:left;">${this._escHtml(s.ten)}</td>
+                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSoLenDon)}<div style="font-size:11.5px; font-weight:400; color:var(--clr-text-muted);">${s.soDonLenDon} đơn</div></td>
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSo)}</td>
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:var(--clr-text-muted);">${this._formatVND(s.kpi)}</td>
                     ${isFullMonth ? `<td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:700; color:${color};">${s.ptDat.toFixed(1)}%</td>` : ''}
@@ -4440,7 +4653,7 @@ const App = {
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left;">${this._escHtml(r.ngay_thu_du || '')}</td>
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left; font-weight:500;"><a href="#" style="color:var(--clr-primary); text-decoration:none; border-bottom:1px solid var(--clr-primary);" onclick="App._moDonTuBaoCao('${this._escHtml(r.ma_don || '')}'); return false;" title="Mở chi tiết đơn">${this._escHtml(r.ma_don || '')}</a></td>
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left;">${this._escHtml(s.ten)}</td>
-                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(this._tinhSoPhaiThu(r))}</td>
+                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(this._doanhSoCuaSale(r, s.ten))}${this._tiLeSale(r, s.ten) < 1 ? `<div style="font-size:11.5px; font-weight:400; color:var(--clr-text-muted);">${Math.round(this._tiLeSale(r, s.ten) * 1000) / 10}% của ${this._formatVND(this._tinhSoPhaiThu(r))}</div>` : ''}</td>
                   </tr>
             `;
           });
@@ -4514,7 +4727,7 @@ const App = {
                 <tr class="table-row-hover">
                   <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left;">${this._escHtml(r.ngay_thu_du || '')}</td>
                   <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left; font-weight:500;"><a href="#" style="color:var(--clr-primary); text-decoration:none; border-bottom:1px solid var(--clr-primary);" onclick="App._moDonTuBaoCao('${this._escHtml(r.ma_don || '')}'); return false;" title="Mở chi tiết đơn">${this._escHtml(r.ma_don || '')}</a></td>
-                  <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left;">${this._escHtml(r.sale_phu_trach || '')}</td>
+                  <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:left;">${this._escHtml(this._moTaChiaSale(r))}</td>
                   <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(this._tinhSoPhaiThu(r))}</td>
                 </tr>
           `;
@@ -5255,8 +5468,9 @@ const App = {
            const ptThuong = parseFloat(nhanVien.phan_tram_thuong) || 0;
            const kpiDoanhSo = this._parseCurrency(nhanVien.kpi_doanh_so);
 
-           const saleOrders = validOrdersInMonth.filter(d => (d.sale_phu_trach || '').trim().toLowerCase() === hoTen.toLowerCase());
-           totalThuongRevenue = saleOrders.reduce((sum, d) => sum + this._tinhSoPhaiThu(d), 0);
+           // [06/10] Tính theo tỉ lệ chia doanh số (đơn không chia = 100% sale phụ trách)
+           const saleOrders = validOrdersInMonth.filter(d => this._tiLeSale(d, hoTen) > 0);
+           totalThuongRevenue = saleOrders.reduce((sum, d) => sum + this._doanhSoCuaSale(d, hoTen), 0);
 
            let ptDat = 0;
            if (kpiDoanhSo > 0) {
@@ -7923,7 +8137,7 @@ const App = {
               <div class="kb-detail-section-title">Thông tin đơn</div>
               <div class="kb-detail-grid">
                 ${this._detailField('Item', don.item, 'det-item')}
-                ${isSaleAdmin ? this._detailField('Sale phụ trách', don.sale_phu_trach, 'det-sale') : ''}
+                ${isSaleAdmin ? this._htmlChiaSaleChiTiet(don) : ''}
                 ${isSaleAdmin ? this._detailField('Điểm đơn', don.diem_don, 'det-diem-don') : ''}
                 ${ngayLenDonHtml}
                 ${ngayHetHanHtml}
@@ -9627,6 +9841,19 @@ const App = {
       patch.brief = document.getElementById('det-brief').value.trim();
     }
 
+    // [06/10] Chia doanh số sale. Sai thì KHÔNG lưu phần sale (các ô khác vẫn lưu).
+    let chiaMoi = null;
+    if (!isDesigner && document.getElementById('det-sale')) {
+      const kq = this._docChiaSale('det');
+      if (kq.loi) {
+        delete patch.sale_phu_trach;
+        this._showToast('Chưa lưu phần chia doanh số: ' + kq.loi, 'error', 6000);
+      } else {
+        patch.sale_phu_trach = kq.saleChinh;
+        chiaMoi = kq.chuoi;
+      }
+    }
+
     const don = this._kanbanData.find(d => d.ma_don === maDon);
     if (!don) throw new Error('Không tìm thấy đơn ' + maDon);
 
@@ -9658,6 +9885,11 @@ const App = {
       const hData = await headerRes.json();
       const headers = (hData.values || [[]])[0] || [];
       const sheetRow = rowIdx + 2;
+
+      if (chiaMoi !== null) {
+        if (chiaMoi) await this._baoDamCotDonHang(headers, 'chia_doanh_so');
+        patch.chia_doanh_so = chiaMoi;   // '' = bỏ chia (chỉ ghi khi đã có cột)
+      }
 
       // Bổ sung ghi danh sách designer vào cột designer_phu_trach
       const canWriteDesigner = ['admin', 'leader', 'sale'].includes(this.session?.role);
@@ -9921,7 +10153,7 @@ const App = {
         donHangList.forEach(d => { if (tienDonMap[d.ma_don] !== undefined) d.tong_gia_tri = tienDonMap[d.ma_don]; });
 
         const saleOrders = donHangList.filter(d => {
-           if ((d.sale_phu_trach || '').trim().toLowerCase() !== hoTen) return false;
+           if (this._tiLeSale(d, hoTen) <= 0) return false;   // [06/10] có phần trong đơn
            const tt = (d.trang_thai || '').toLowerCase();
            if (tt.includes('hủy') || tt.includes('huy')) return false;
            const ngayThuDu = (d.ngay_thu_du || '').trim();
@@ -9936,7 +10168,7 @@ const App = {
            return false;
         });
 
-        const totalRevenue = saleOrders.reduce((sum, d) => sum + this._tinhSoPhaiThu(d), 0);
+        const totalRevenue = saleOrders.reduce((sum, d) => sum + this._doanhSoCuaSale(d, hoTen), 0);
 
         if (saleOrders.length > 0 && Object.keys(tienDonMap).length === 0) {
            html = `<div style="color:#B4453C; font-size:13px;">Không đọc được giá trị đơn hàng (thiếu quyền đọc file TÀI CHÍNH). Nhờ quản lý cấp quyền.</div>`;
