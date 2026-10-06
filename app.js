@@ -4329,6 +4329,104 @@ const App = {
     content.innerHTML = html;
   },
 
+  // ════════════════════════════════════════════════════════════
+  // POPUP DANH SÁCH ĐƠN CỦA 1 SALE (Hiệu suất sale)   (thêm 06/10/2026)
+  // Bấm "x đơn" dưới số tiền -> xem từng đơn -> bấm đơn mở chi tiết.
+  // Đóng chi tiết đơn -> quay lại đúng bộ lọc + popup cũ.
+  // ════════════════════════════════════════════════════════════
+  _htmlNutSoDon(ten, loai, soDon) {
+    const tenJs = this._escHtml(JSON.stringify(ten));
+    if (!soDon) return `<div style="font-size:11.5px; font-weight:400; color:var(--clr-text-muted);">0 đơn</div>`;
+    return `<div><a href="#" onclick="App._moPopupDonSale(${tenJs}, '${loai}'); return false;"
+      title="Xem từng đơn" style="font-size:11.5px; font-weight:600; color:var(--clr-accent); text-decoration:none; border-bottom:1px dashed var(--clr-accent);">${soDon} đơn ›</a></div>`;
+  },
+
+  _nhanKhoangLocHsSale() {
+    const t = this._hsSaleTrangThai || {};
+    const doi = (v) => { const [y, m, d] = (v || '').split('-'); return d ? `${d}/${m}/${y}` : ''; };
+    if (t.fType === 'week')  return 'Tuần này';
+    if (t.fType === 'year')  return 'Năm nay';
+    if (t.fType === 'custom') return `${doi(t.cFrom)} – ${doi(t.cTo)}`;
+    return 'Tháng này';
+  },
+
+  _moPopupDonSale(ten, loai) {
+    document.getElementById('modal-don-sale')?.remove();
+    const nhom = (this._hsSaleDsDon || {})[ten] || {};
+    const ds = [...(loai === 'chot' ? (nhom.chot || []) : (nhom.lenDon || []))];
+    const cotNgay = loai === 'chot' ? 'ngay_thu_du' : 'ngay_len_don';
+    const docNgay = (v) => { const p = (v || '').toString().trim().split(' ')[0].split('/'); return p.length === 3 ? new Date(+p[2], +p[1] - 1, +p[0]).getTime() : 0; };
+    ds.sort((a, b) => docNgay(a[cotNgay]) - docNgay(b[cotNgay]));
+
+    const th = 'padding:12px 14px; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15); white-space:nowrap;';
+    const td = 'padding:12px 14px; border-bottom:1px solid rgba(138,114,76,0.08); vertical-align:top;';
+    let tongGiaTri = 0, tongCuaSale = 0;
+    const tenJs = this._escHtml(JSON.stringify(ten));
+    const dong = ds.map(d => {
+      const giaTri = this._tinhSoPhaiThu(d);
+      const tile = this._tiLeSale(d, ten);
+      const cuaSale = giaTri * tile;
+      tongGiaTri += giaTri; tongCuaSale += cuaSale;
+      const khach = d.ten_khach || d.brand || '';
+      const chia = this._phanChiaSale(d).length > 1 ? this._moTaChiaSale(d) : '';
+      const ma = this._escHtml(d.ma_don || '');
+      return `<tr style="cursor:pointer;" onmouseover="this.style.background='#FBF7F1'" onmouseout="this.style.background=''"
+            onclick="App._moDonTuPopupSale('${ma}', ${tenJs}, '${loai}')" title="Mở chi tiết đơn">
+          <td style="${td} white-space:nowrap;">${this._escHtml((d[cotNgay] || '').toString().split(' ')[0])}</td>
+          <td style="${td} white-space:nowrap; font-weight:600; color:var(--clr-primary);"><span style="border-bottom:1px solid var(--clr-primary);">${ma}</span></td>
+          <td style="${td}">${this._escHtml(khach)}${d.item ? `<div style="font-size:12px; color:var(--clr-text-muted);">${this._escHtml(d.item)}</div>` : ''}</td>
+          <td style="${td} font-size:12.5px; color:#5C544D;">${this._escHtml(d.cot_kanban || d.trang_thai || '')}</td>
+          <td style="${td} text-align:right; white-space:nowrap;">${this._formatVND(giaTri)}</td>
+          <td style="${td} text-align:right; white-space:nowrap;">${Math.round(tile * 1000) / 10}%${chia ? `<div style="font-size:11.5px; color:var(--clr-text-muted); white-space:normal; min-width:120px;">${this._escHtml(chia)}</div>` : ''}</td>
+          <td style="${td} text-align:right; white-space:nowrap; font-weight:700;">${this._formatVND(cuaSale)}</td>
+        </tr>`;
+    }).join('');
+
+    const tieuDe = loai === 'chot' ? 'Doanh số chốt (đã thu đủ)' : 'Doanh số lên đơn';
+    const ghiChu = loai === 'chot'
+      ? 'Đơn có ngày thu đủ trong khoảng lọc, không tính đơn hủy.'
+      : 'Đơn có ngày lên đơn trong khoảng lọc, không tính đơn hủy, chưa cần thu đủ.';
+    const html = `
+      <div id="modal-don-sale" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;"
+           onclick="if(event.target===this) this.remove()">
+        <div style="background:#FAF8F5; width:100%; max-width:960px; border-radius:20px; box-shadow:0 24px 48px rgba(42,36,32,0.12); display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
+          <div style="padding:20px 24px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <div>
+              <h3 style="margin:0; font-size:18px; color:#2A2420; font-weight:800;">${this._escHtml(ten)} · ${tieuDe}</h3>
+              <div style="font-size:13px; color:var(--clr-text-muted); margin-top:4px;">${this._escHtml(this._nhanKhoangLocHsSale())} · ${ds.length} đơn · ${ghiChu} Bấm vào một đơn để xem chi tiết.</div>
+            </div>
+            <button onclick="document.getElementById('modal-don-sale').remove()" title="Đóng"
+              style="flex-shrink:0; background:rgba(138,114,76,0.08); border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; color:#8A724C; font-size:16px;">✕</button>
+          </div>
+          <div style="flex:1; overflow:auto; background:#FFF;">
+            <table style="width:100%; border-collapse:collapse; font-size:13.5px;">
+              <thead style="position:sticky; top:0; background:#FFF; z-index:1;"><tr>
+                <th style="${th} text-align:left;">${loai === 'chot' ? 'Ngày thu đủ' : 'Ngày lên đơn'}</th>
+                <th style="${th} text-align:left;">Mã đơn</th>
+                <th style="${th} text-align:left;">Khách</th>
+                <th style="${th} text-align:left;">Trạng thái</th>
+                <th style="${th} text-align:right;">Giá trị đơn</th>
+                <th style="${th} text-align:right;">Tỉ lệ</th>
+                <th style="${th} text-align:right;">Doanh số tính cho ${this._escHtml(ten)}</th>
+              </tr></thead>
+              <tbody>${dong || `<tr><td colspan="7" style="padding:32px; text-align:center; color:var(--clr-text-muted);">Không có đơn nào</td></tr>`}</tbody>
+            </table>
+          </div>
+          <div style="padding:16px 24px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; background:linear-gradient(135deg, #EDE7F6, #F3EFFB);">
+            <div style="font-size:13px; color:#5C544D;">Tổng giá trị các đơn: <b>${this._formatVND(tongGiaTri)}</b></div>
+            <div style="font-size:14px; color:#2A2420;">Tính cho ${this._escHtml(ten)}: <b style="font-size:20px;">${this._formatVND(tongCuaSale)}</b></div>
+          </div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  },
+
+  _moDonTuPopupSale(maDon, ten, loai) {
+    this._hsSaleKhoiPhuc = { ...(this._hsSaleTrangThai || {}), popup: { ten, loai } };
+    document.getElementById('modal-don-sale')?.remove();
+    this._moDonTuBaoCao(maDon);
+  },
+
   _moDonTuBaoCao(maDon) {
     if (!maDon) return;
     console.log(`[DEBUG mo don tu bao cao] mã đơn: ${maDon}`);
@@ -4383,7 +4481,15 @@ const App = {
       this._hsSaleCauHinhList = cauHinhList;
 
       // Render nội dung ban đầu (mặc định: tháng này, tab kpi)
-      this._renderHieuSuatSaleContent('kpi', 'month', '', '');
+      // [06/10] Vừa xem chi tiết đơn từ popup -> quay lại đúng bộ lọc và mở lại popup
+      const kp = this._hsSaleKhoiPhuc;
+      this._hsSaleKhoiPhuc = null;
+      if (kp) {
+        this._renderHieuSuatSaleContent(kp.tabId || 'kpi', kp.fType || 'month', kp.cFrom || '', kp.cTo || '');
+        if (kp.popup) this._moPopupDonSale(kp.popup.ten, kp.popup.loai);
+      } else {
+        this._renderHieuSuatSaleContent('kpi', 'month', '', '');
+      }
     } catch (e) {
       console.error(e);
       content.innerHTML = `<div style="padding:24px; color:red; text-align:center;">Lỗi tải dữ liệu: ${e.message}</div>`;
@@ -4392,6 +4498,8 @@ const App = {
 
   _renderHieuSuatSaleContent(tabId, filterType = 'month', customFrom = '', customTo = '') {
     const content = document.getElementById('page-content');
+    this._hsSaleTrangThai = { tabId, fType: filterType, cFrom: customFrom, cTo: customTo };
+    this._hsSaleDsDon = {};   // [06/10] danh sách đơn từng sale cho popup
     
     // Parse filter type
     let fType = filterType;
@@ -4512,6 +4620,7 @@ const App = {
         ptDat: ptDat
       });
       saleOrdersMap[hoTen] = saleOrders;
+      this._hsSaleDsDon[hoTen] = { lenDon: donLenDon, chot: saleOrders };
     });
 
     salesPerformance.sort((a, b) => b.doanhSo - a.doanhSo);
@@ -4615,8 +4724,8 @@ const App = {
           html += `
                   <tr class="table-row-hover">
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); font-weight:600; text-align:left;">${this._escHtml(s.ten)}</td>
-                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSoLenDon)}<div style="font-size:11.5px; font-weight:400; color:var(--clr-text-muted);">${s.soDonLenDon} đơn</div></td>
-                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSo)}</td>
+                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSoLenDon)}${this._htmlNutSoDon(s.ten, 'lenDon', s.soDonLenDon)}</td>
+                    <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600;">${this._formatVND(s.doanhSo)}${this._htmlNutSoDon(s.ten, 'chot', (saleOrdersMap[s.ten] || []).length)}</td>
                     <td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:var(--clr-text-muted);">${this._formatVND(s.kpi)}</td>
                     ${isFullMonth ? `<td style="padding:16px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:700; color:${color};">${s.ptDat.toFixed(1)}%</td>` : ''}
                   </tr>
