@@ -363,7 +363,7 @@ const App = {
     if ([CONFIG.SHEETS.GIAO_DICH_TIEN, CONFIG.SHEETS.TIEN_DON].includes(sheetName)) {
       return CONFIG.FINANCE_SPREADSHEET_ID;
     }
-    if ([CONFIG.SHEETS.CAU_HINH_LUONG, CONFIG.SHEETS.THUONG_RIENG, CONFIG.SHEETS.LUONG_CB_THANG].includes(sheetName)) {
+    if ([CONFIG.SHEETS.CAU_HINH_LUONG, CONFIG.SHEETS.THUONG_RIENG, CONFIG.SHEETS.LUONG_CB_THANG, CONFIG.SHEETS.LICH_SU_CHOT].includes(sheetName)) {
       return CONFIG.PAYROLL_SPREADSHEET_ID;
     }
     return CONFIG.SPREADSHEET_ID;
@@ -5780,6 +5780,14 @@ const App = {
       tbody.innerHTML = htmlRows;
       tableCont.style.display = 'block';
 
+      // Trạng thái nút Chốt lương: đọc tab LICH_SU_CHOT (thiếu tab thì coi như chưa chốt)
+      if (this.session?.role === 'admin') {
+        const lichSu = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.LICH_SU_CHOT || 'LICH_SU_CHOT').catch(() => []);
+        const cacLan = (lichSu || []).filter(r => this._serialToMonthYear(r.thang) === targetMonthYear);
+        this._trangThaiChot = cacLan.length ? cacLan[cacLan.length - 1] : null;
+        this._capNhatNutChot();
+      }
+
     } catch (err) {
       console.error('[Payroll] Lỗi tính lương:', err);
       errorCont.innerHTML = `<strong>Lỗi:</strong> ${err.message}`;
@@ -6063,6 +6071,39 @@ const App = {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   },
 
+  // ─────────────────────────────────────────────────────────────
+  // TRẠNG THÁI NÚT CHỐT LƯƠNG (thêm 08/10/2026)
+  // "Vân tay" = tên:tổng lương của từng người. Chốt xong mà số trên màn
+  // hình đổi (thêm thưởng, sửa lương CB...) thì vân tay lệch -> nút cam.
+  // ─────────────────────────────────────────────────────────────
+  _vanTayLuong() {
+    return (this._lastCalculatedSalaryData || [])
+      .map(r => `${r.ho_ten}:${Math.round(r.tong_luong) || 0}`).sort().join('|');
+  },
+  _tongChiDaChot() {
+    return (this._lastCalculatedSalaryData || []).reduce((s, r) => s + (Math.round(r.tong_luong) || 0), 0);
+  },
+  _capNhatNutChot() {
+    const btn = document.getElementById('btn-chot-luong');
+    if (!btn) return;
+    const tt = this._trangThaiChot;
+    const dat = (nen, chu, vien) => { btn.style.background = nen; btn.style.color = chu; btn.style.border = vien; };
+    if (!tt) {
+      btn.innerHTML = 'CHỐT & LƯU LƯƠNG';
+      btn.title = 'Tháng này chưa chốt';
+      dat('', '', '');
+    } else if (String(tt.van_tay || '') === this._vanTayLuong()) {
+      const gio = String(tt.ngay_chot || '').replace(/^'/, '');
+      btn.innerHTML = `✓ ĐÃ CHỐT · ${gio}`;
+      btn.title = 'Đã chốt, số khớp với bảng hiện tại. Bấm để chốt lại nếu cần.';
+      dat('#3B7A57', '#FFFFFF', '1px solid #3B7A57');
+    } else {
+      btn.innerHTML = '⚠ SỐ ĐÃ ĐỔI · CHỐT LẠI';
+      btn.title = 'Đã chốt trước đó nhưng số trên bảng đã thay đổi. Bấm để chốt lại.';
+      dat('#C77D2E', '#FFFFFF', '1px solid #C77D2E');
+    }
+  },
+
   async chotLuong() {
     if (!this._lastCalculatedSalaryData || this._lastCalculatedSalaryData.length === 0) {
       alert('Không có dữ liệu lương để chốt. Vui lòng ấn Xem trước (và đảm bảo có cấu hình file cá nhân).');
@@ -6079,7 +6120,11 @@ const App = {
       return;
     }
 
-    if (!confirm(`Chốt lương tháng ${targetMonth}? Dữ liệu sẽ ghi vào file cá nhân của nhân viên.`)) {
+    const daChot = this._trangThaiChot;
+    const cauHoi = daChot
+      ? `Tháng ${targetMonth} ĐÃ CHỐT lúc ${daChot.ngay_chot}.\nChốt lại sẽ GHI ĐÈ số cũ trong file cá nhân của nhân viên. Tiếp tục?`
+      : `Chốt lương tháng ${targetMonth}? Dữ liệu sẽ ghi vào file cá nhân của nhân viên.`;
+    if (!confirm(cauHoi)) {
       return;
     }
 
@@ -6131,6 +6176,23 @@ const App = {
       btn.disabled = false;
       btn.style.opacity = '1';
     }
+
+    // Chỉ ghi "đã chốt" khi chốt trọn vẹn cho tất cả mọi người
+    if (errors.length === 0 && successCount > 0) {
+      const d = new Date();
+      const p2 = n => String(n).padStart(2, '0');
+      const ngayChot = `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+      const dong = {
+        thang: targetMonth, ngay_chot: ngayChot, nguoi_chot: this.session?.email || '',
+        so_nguoi: successCount, tong_chi: this._tongChiDaChot(), van_tay: this._vanTayLuong(),
+      };
+      try {
+        await this._appendSheet(CONFIG.SHEETS.LICH_SU_CHOT || 'LICH_SU_CHOT',
+          [[`'${dong.thang}`, `'${dong.ngay_chot}`, dong.nguoi_chot, dong.so_nguoi, dong.tong_chi, dong.van_tay]]);
+      } catch (e) { console.warn('[Chốt lương] Không ghi được LICH_SU_CHOT:', e.message); }
+      this._trangThaiChot = dong;
+    }
+    this._capNhatNutChot();
 
     if (errors.length > 0) {
       alert(`Đã chốt lương tháng ${targetMonth} cho ${successCount} nhân viên.\nTuy nhiên có lỗi với các nhân viên sau:\n- ` + errors.join('\n- '));
