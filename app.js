@@ -363,7 +363,7 @@ const App = {
     if ([CONFIG.SHEETS.GIAO_DICH_TIEN, CONFIG.SHEETS.TIEN_DON].includes(sheetName)) {
       return CONFIG.FINANCE_SPREADSHEET_ID;
     }
-    if ([CONFIG.SHEETS.CAU_HINH_LUONG, CONFIG.SHEETS.THUONG_RIENG].includes(sheetName)) {
+    if ([CONFIG.SHEETS.CAU_HINH_LUONG, CONFIG.SHEETS.THUONG_RIENG, CONFIG.SHEETS.LUONG_CB_THANG].includes(sheetName)) {
       return CONFIG.PAYROLL_SPREADSHEET_ID;
     }
     return CONFIG.SPREADSHEET_ID;
@@ -5454,13 +5454,17 @@ const App = {
       // 1. Tải CAU_HINH_LUONG và THUONG_RIENG
       let cauHinhList = [];
       let thuongRiengList = [];
+      let luongCbThangList = [];
       try {
-        const [chData, trData] = await Promise.all([
+        const [chData, trData, cbData] = await Promise.all([
           this._readSheet(this.session.accessToken, CONFIG.SHEETS.CAU_HINH_LUONG),
-          this._readSheet(this.session.accessToken, CONFIG.SHEETS.THUONG_RIENG)
+          this._readSheet(this.session.accessToken, CONFIG.SHEETS.THUONG_RIENG),
+          // Lương CB riêng theo tháng (thêm 08/10/2026). Thiếu tab thì bỏ qua, không làm hỏng bảng lương.
+          this._readSheet(this.session.accessToken, CONFIG.SHEETS.LUONG_CB_THANG || 'LUONG_CB_THANG').catch(() => [])
         ]);
         cauHinhList = chData;
         thuongRiengList = trData;
+        luongCbThangList = cbData || [];
         this._currentCauHinhList = cauHinhList;
       } catch (err) {
         if (err.message.includes('403')) {
@@ -5539,7 +5543,17 @@ const App = {
         const hoTen = nhanVien.ho_ten.trim();
         const loaiLuong = (nhanVien.loai_luong || '').trim().toLowerCase();
         const vaiTro = nhanVien.vai_tro || '';
-        const luongCoBan = this._parseCurrency(nhanVien.luong_co_ban);
+        // Lương CB: ưu tiên dòng riêng của THÁNG ĐANG XEM trong tab LUONG_CB_THANG,
+        // không có thì dùng mức mặc định trong CAU_HINH_LUONG.
+        const luongCoBanMacDinh = this._parseCurrency(nhanVien.luong_co_ban);
+        const dongCbThang = luongCbThangList.find(r =>
+          (r.email || '').trim().toLowerCase() === email &&
+          (this._serialToMonthYear ? this._serialToMonthYear(r.thang) : (r.thang || '').trim()) === targetMonthYear &&
+          String(r.luong_co_ban || '').trim() !== '');
+        const luongCoBan = dongCbThang ? this._parseCurrency(dongCbThang.luong_co_ban) : luongCoBanMacDinh;
+        const ghiChuCbThang = dongCbThang
+          ? `<div style="font-size:11px; font-weight:500; color:#B4453C; margin-top:2px;">Riêng tháng này · mặc định ${this._formatVND(luongCoBanMacDinh)}</div>`
+          : '';
 
         // Tính thưởng riêng
         const thuongRieng = thuongRiengList
@@ -5711,7 +5725,7 @@ const App = {
               <div style="font-size:13px; color:#6B6B6B; margin-bottom:4px;">${this._escHtml(email)}</div>
               <div style="font-size:12px; display:inline-block; padding:2px 8px; background:var(--clr-bg); border-radius:4px; color:var(--clr-accent); text-transform:uppercase;">${this._escHtml(vaiTro)} &bull; ${this._escHtml(loaiLuong)}</div>
             </td>
-            <td style="padding:16px; text-align:right; font-weight:700; font-size:16px; color:#2A2420; white-space:nowrap;">${this._formatVND(luongCoBan)}</td>
+            <td style="padding:16px; text-align:right; font-weight:700; font-size:16px; color:#2A2420; white-space:nowrap;">${this._formatVND(luongCoBan)}${ghiChuCbThang}</td>
             <td style="padding:16px; text-align:right;">${phuCapHtml}</td>
             <td style="padding:16px; text-align:right; white-space:nowrap; border-radius: ${explHtml ? '0 16px 0 0' : '0 16px 16px 0'};"><span style="background:#F5EFE6; color:#2A2420; font-weight:800; font-size:18px; padding:6px 12px; border-radius:8px; display:inline-block;">${this._formatVND(tongLuong)}</span></td>
           </tr>

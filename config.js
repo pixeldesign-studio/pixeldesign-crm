@@ -56,6 +56,7 @@ const CONFIG = {
     TIEN_DON:       'TIEN_DON',
     CAU_HINH_LUONG: 'CAU_HINH_LUONG',
     THUONG_RIENG:   'THUONG_RIENG',
+    LUONG_CB_THANG: 'LUONG_CB_THANG',   // lương cơ bản riêng cho 1 tháng (file lương)
     DIEM_XU_LY:     'DIEM_XU_LY',
     KPI_SALE:       'KPI_SALE',
   },
