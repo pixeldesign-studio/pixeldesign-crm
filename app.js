@@ -5316,6 +5316,7 @@ const App = {
           ${this.session?.role === 'admin' ? `
             <button class="btn" onclick="App.showAddThuongRiengForm()" style="padding: 6px 16px; border-radius: 16px; background:#F5EFE6; color:#9C7E5E; border:1px solid #CBB799; font-weight:600; cursor:pointer;">+ Thưởng riêng</button>
             <button id="btn-chot-luong" class="btn btn-primary" onclick="App.chotLuong()" style="padding: 6px 16px; border-radius: 16px;">CHỐT & LƯU LƯƠNG</button>
+            <button class="btn" onclick="App.xuatAnhBangLuong()" style="padding: 6px 16px; border-radius: 16px; background:#FFFFFF; color:#9C7E5E; border:1px solid #CBB799; font-weight:600; cursor:pointer;">Xuất ảnh kế toán</button>
           ` : ''}
         </div>
       </div>
@@ -5533,6 +5534,7 @@ const App = {
       let progressHtml = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">`;
       
       this._lastCalculatedSalaryData = [];
+      this._bangLuongXuatAnh = [];   // dữ liệu cho nút Xuất ảnh kế toán (mọi người có lương)
       this._currentTargetMonthYear = targetMonthYear;
 
       // 3. Tính toán cho từng người
@@ -5699,6 +5701,16 @@ const App = {
               .join(', ');
            explHtml += `<div style="margin-top:6px;"><b>Thưởng riêng tháng này:</b> ${this._formatVND(thuongRieng)} ${notes ? `(${this._escHtml(notes)})` : ''}</div>`;
         }
+
+        this._bangLuongXuatAnh.push({
+          ho_ten: hoTen, vai_tro: vaiTro,
+          luong_co_ban: Math.round(luongCoBan) || 0,
+          support: Math.round(support) || 0,
+          thuong: Math.round(thuongSale) || 0,
+          luong_hieu_suat: Math.round(luongHieuSuat) || 0,
+          thuong_rieng: Math.round(thuongRieng) || 0,
+          tong_luong: Math.round(tongLuong) || 0,
+        });
 
         if (nhanVien.file_ca_nhan_id) {
            this._lastCalculatedSalaryData.push({
@@ -5963,6 +5975,92 @@ const App = {
         </ul>
         ${conLai > 0 ? `<div style="margin-top:8px; font-size:13px;">…và ${conLai} vấn đề nữa. Sửa các mục trên rồi bấm <b>Xem</b> lại để soát tiếp.</div>` : ''}
       </div>`;
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // XUẤT ẢNH BẢNG LƯƠNG CHO KẾ TOÁN (thêm 08/10/2026)
+  // Vẽ thẳng bằng canvas, không dùng thư viện ngoài. Chỉ có tên, các
+  // khoản lương và tổng — không có công thức, KPI, điểm.
+  // Cột nào cả tháng đều bằng 0 thì ẩn cho gọn.
+  // ─────────────────────────────────────────────────────────────
+  async xuatAnhBangLuong() {
+    const ds = this._bangLuongXuatAnh || [];
+    const thang = this._currentTargetMonthYear || '';
+    if (!ds.length) { alert('Chưa có dữ liệu. Chọn tháng rồi bấm "Xem" trước khi xuất ảnh.'); return; }
+
+    const tien = n => (Math.round(n) || 0) === 0 ? '–' : Math.round(n).toLocaleString('vi-VN');
+    const COT_TIEN = [
+      { k: 'luong_co_ban',    t: 'Lương CB' },
+      { k: 'support',         t: 'Support' },
+      { k: 'thuong',          t: 'Thưởng KPI' },
+      { k: 'luong_hieu_suat', t: 'Lương hiệu suất' },
+      { k: 'thuong_rieng',    t: 'Thưởng riêng' },
+    ].filter(c => c.k === 'luong_co_ban' || ds.some(r => r[c.k]));
+    const cot = [{ k: 'stt', t: 'STT', w: 56, l: 1 }, { k: 'ho_ten', t: 'Họ tên', w: 230, l: 1 }]
+      .concat(COT_TIEN.map(c => ({ ...c, w: 150 })))
+      .concat([{ k: 'tong_luong', t: 'Tổng nhận', w: 170, dam: 1 }]);
+    const tong = {}; cot.forEach(c => { tong[c.k] = ds.reduce((s, r) => s + (r[c.k] || 0), 0); });
+
+    const font = (getComputedStyle(document.body).fontFamily || 'Arial, sans-serif');
+    const PAD = 40, HANG = 46, DAU = 120, CHAN = 60;
+    const W = PAD * 2 + cot.reduce((s, c) => s + c.w, 0);
+    const H = DAU + HANG * (ds.length + 2) + CHAN;
+    const SC = 2;
+    const cv = document.createElement('canvas');
+    cv.width = W * SC; cv.height = H * SC;
+    const g = cv.getContext('2d'); g.scale(SC, SC);
+
+    g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#2A2420'; g.font = `700 24px ${font}`; g.textBaseline = 'middle';
+    g.fillText(`BẢNG LƯƠNG THÁNG ${thang}`, PAD, 46);
+    g.fillStyle = '#9C7E5E'; g.font = `600 14px ${font}`;
+    g.fillText('PIXELDESIGN', PAD, 78);
+
+    const veHang = (y, giaTri, kieu) => {
+      if (kieu === 'dau') { g.fillStyle = '#F5EFE6'; g.fillRect(PAD, y, W - PAD * 2, HANG); }
+      if (kieu === 'tong') { g.fillStyle = '#2A2420'; g.fillRect(PAD, y, W - PAD * 2, HANG); }
+      let x = PAD;
+      cot.forEach(c => {
+        const v = giaTri(c);
+        g.fillStyle = kieu === 'tong' ? '#FFFFFF' : (kieu === 'dau' ? '#6B5A45' : '#2A2420');
+        g.font = `${(kieu || c.dam) ? 700 : 500} ${kieu === 'dau' ? 13 : 15}px ${font}`;
+        if (c.l) { g.textAlign = 'left'; g.fillText(v, x + 12, y + HANG / 2); }
+        else { g.textAlign = 'right'; g.fillText(v, x + c.w - 12, y + HANG / 2); }
+        x += c.w;
+      });
+      g.textAlign = 'left';
+      if (!kieu) { g.strokeStyle = '#EDE6DA'; g.beginPath(); g.moveTo(PAD, y + HANG); g.lineTo(W - PAD, y + HANG); g.stroke(); }
+    };
+
+    let y = DAU;
+    veHang(y, c => c.t, 'dau'); y += HANG;
+    ds.forEach((r, i) => {
+      veHang(y, c => c.k === 'stt' ? String(i + 1) : c.k === 'ho_ten' ? r.ho_ten : tien(r[c.k])); y += HANG;
+    });
+    veHang(y, c => c.k === 'stt' ? '' : c.k === 'ho_ten' ? 'TỔNG CỘNG' : tien(tong[c.k]), 'tong'); y += HANG;
+
+    const d = new Date();
+    const ngay = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    g.fillStyle = '#8A8178'; g.font = `400 12px ${font}`;
+    g.fillText(`Đơn vị: VNĐ · Xuất ngày ${ngay}`, PAD, y + 30);
+
+    const tenFile = `bang-luong-${thang.replace('/', '-')}.png`;
+    // Tạo ảnh ĐỒNG BỘ (không await) — iPhone chỉ cho mở bảng chia sẻ ngay
+    // tại khoảnh khắc bấm nút; chờ bất kỳ thứ gì trước đó là Safari chặn.
+    const b64 = cv.toDataURL('image/png').split(',')[1];
+    const bytes = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'image/png' });
+    // Điện thoại: mở bảng chia sẻ (gửi thẳng Zalo). Máy tính: tải file về.
+    const file = new File([blob], tenFile, { type: 'image/png' });
+    const laDienThoai = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    if (laDienThoai && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: `Bảng lương ${thang}` }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = tenFile;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   },
 
   async chotLuong() {
