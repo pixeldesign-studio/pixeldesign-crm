@@ -5557,7 +5557,7 @@ const App = {
 
         // Tính thưởng riêng
         const thuongRieng = thuongRiengList
-          .filter(tr => (tr.email||'').trim().toLowerCase() === email && (tr.thang||'').trim() === targetMonthYear)
+          .filter(tr => (tr.email||'').trim().toLowerCase() === email && this._serialToMonthYear(tr.thang) === targetMonthYear)
           .reduce((sum, tr) => sum + this._parseCurrency(tr.so_tien), 0);
 
         let support = 0;
@@ -5693,7 +5693,7 @@ const App = {
 
         if (thuongRieng > 0) {
            const notes = thuongRiengList
-              .filter(tr => (tr.email||'').trim().toLowerCase() === email && (tr.thang||'').trim() === targetMonthYear)
+              .filter(tr => (tr.email||'').trim().toLowerCase() === email && this._serialToMonthYear(tr.thang) === targetMonthYear)
               .map(tr => (tr.ghi_chu||'').trim())
               .filter(Boolean)
               .join(', ');
@@ -5873,7 +5873,9 @@ const App = {
     }
 
     try {
-      await this._appendSheet(CONFIG.SHEETS.THUONG_RIENG, [[email, thang, soTien, ghiChu]]);
+      // Dấu nháy đơn đầu tháng: bắt Sheets giữ '09/2026' là CHỮ. Không có dấu này
+      // Sheets tự đổi thành ngày (số 46266) và thưởng không khớp tháng nào.
+      await this._appendSheet(CONFIG.SHEETS.THUONG_RIENG, [[email, `'${thang}`, soTien, ghiChu]]);
       alert('Đã lưu thưởng riêng thành công!');
       document.getElementById(modalId).remove();
       await this.loadBangLuong();
