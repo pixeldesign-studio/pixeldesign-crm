@@ -7074,21 +7074,40 @@ const App = {
         return;
       }
 
+      // [12/10/2026] Tổng điểm không được vượt Điểm đơn (giống lúc chốt điểm)
+      const donSua = (this._kanbanData || []).find(d => d.ma_don === maDon);
+      const diemDonSua = donSua && donSua.diem_don !== undefined && donSua.diem_don !== '' ? parseFloat(donSua.diem_don) : NaN;
+      const tongSua = uniqueDesigners.reduce((t, n) => t + finalData[n], 0);
+      if (!isNaN(diemDonSua) && tongSua > diemDonSua) {
+        this._showToast(`Tổng điểm designer (${tongSua}) lớn hơn điểm đơn (${diemDonSua}). Sửa điểm đơn trước hoặc nhập lại.`, 'error', 6000);
+        this._isChotDiemProcessing = false;
+        return;
+      }
+
       this._showToast('Đang lưu lại điểm...', 'info');
       const diemRows = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DIEM_XU_LY);
+      const todayXL = new Date().toISOString().substring(0, 10);
 
+      // [12/10/2026] Designer đã có dòng điểm -> sửa dòng đó.
+      // Designer được THÊM VÀO SAU khi đã chốt (chưa có dòng) -> thêm dòng mới,
+      // trước đây chỗ này báo "Không tìm thấy dòng điểm cũ" và bỏ qua.
       let successCount = 0;
+      const dongMoiXL = [];
       for (const name of uniqueDesigners) {
          const diemMoi = finalData[name];
-         const rowIdx = diemRows.findIndex(r => r.ma_don === maDon && r.ten_designer === name);
+         const rowIdx = diemRows.findIndex(r => r.ma_don === maDon && (r.ten_designer || '').trim() === name);
          if (rowIdx === -1) {
-            this._showToast(`Lỗi: Không tìm thấy dòng điểm cũ của designer ${name}`, 'error');
-            continue; 
+            dongMoiXL.push([maDon, name, diemMoi, "'" + todayXL]);
+            continue;
          }
-         
          const sheetRow = rowIdx + 2;
          await this._writeSheet(CONFIG.SHEETS.DIEM_XU_LY, `C${sheetRow}`, [[diemMoi]]);
          successCount++;
+      }
+      if (dongMoiXL.length) {
+         await this._appendSheet(CONFIG.SHEETS.DIEM_XU_LY, dongMoiXL);
+         successCount += dongMoiXL.length;
+         console.log('[Sua diem xu ly] thêm dòng mới cho designer chưa có điểm:', dongMoiXL);
       }
 
       if (successCount > 0) {
@@ -7456,19 +7475,26 @@ const App = {
 
       this._showToast('Đang lưu lại điểm lương...', 'info');
       const diemRows = await this._readSheet(this.session.accessToken, CONFIG.SHEETS.DIEM_DESIGNER);
+      const todayL = new Date().toISOString().substring(0, 10);
 
+      // [12/10/2026] Designer thêm vào sau khi đã chốt lương -> thêm dòng mới (trước đây báo lỗi, bỏ qua)
       let successCount = 0;
+      const dongMoiL = [];
       for (const name of uniqueDesigners) {
          const diemMoi = finalData[name];
-         const rowIdx = diemRows.findIndex(r => r.ma_don === maDon && r.ten_designer === name);
+         const rowIdx = diemRows.findIndex(r => r.ma_don === maDon && (r.ten_designer || '').trim() === name);
          if (rowIdx === -1) {
-            this._showToast(`Lỗi: Không tìm thấy dòng điểm cũ của designer ${name}`, 'error');
-            continue; 
+            dongMoiL.push([maDon, name, diemMoi, "'" + todayL]);
+            continue;
          }
-         
          const sheetRow = rowIdx + 2;
          await this._writeSheet(CONFIG.SHEETS.DIEM_DESIGNER, `C${sheetRow}`, [[diemMoi]]);
          successCount++;
+      }
+      if (dongMoiL.length) {
+         await this._appendSheet(CONFIG.SHEETS.DIEM_DESIGNER, dongMoiL);
+         successCount += dongMoiL.length;
+         console.log('[Sua diem luong] thêm dòng mới cho designer chưa có điểm:', dongMoiL);
       }
 
       if (successCount > 0) {
