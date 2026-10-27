@@ -429,7 +429,62 @@ const App = {
    * @param {Array[]} values     - Mảng 2 chiều
    * @returns {Promise<Object>}
    */
-  async _writeSheet(sheetName, range, values, customSpreadsheetId = null) {
+  async _writeSheet(sheetName, range, values, customSpreadsheetId = null, daNoiBang = false) {
+    try {
+      return await this._writeSheetMotLan(sheetName, range, values, customSpreadsheetId);
+    } catch (e) {
+      // Bảng đã kín (hết cột/hết dòng) -> tự nới bảng rồi ghi lại đúng 1 lần
+      if (daNoiBang || !/exceeds grid limits/i.test(e.message || '')) throw e;
+      await this._noiBangSheet(sheetName, range, e.message, customSpreadsheetId);
+      return this._writeSheet(sheetName, range, values, customSpreadsheetId, true);
+    }
+  },
+
+  /** Đổi chữ cột (A, Z, AB...) thành số thứ tự (1, 26, 28...). */
+  _colLetterToNumber(chu) {
+    let n = 0;
+    for (const c of (chu || '').toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64);
+    return n;
+  },
+
+  /**
+   * Thêm cột/dòng trống vào CUỐI tab cho đủ chỗ ghi vùng `range`.
+   * Chỉ thêm ở cuối nên không xê dịch dữ liệu cũ.
+   */
+  async _noiBangSheet(sheetName, range, thongBaoLoi, customSpreadsheetId = null) {
+    const m = /Max rows:\s*(\d+),\s*max columns:\s*(\d+)/i.exec(thongBaoLoi || '');
+    if (!m) throw new Error(thongBaoLoi);
+    const soDongCo = parseInt(m[1], 10), soCotCo = parseInt(m[2], 10);
+    let cotCan = 0, dongCan = 0;
+    (range.match(/[A-Z]+\d*/gi) || []).forEach(o => {
+      const k = /^([A-Z]+)(\d*)$/i.exec(o);
+      if (!k) return;
+      cotCan = Math.max(cotCan, this._colLetterToNumber(k[1]));
+      if (k[2]) dongCan = Math.max(dongCan, parseInt(k[2], 10));
+    });
+    const themCot = Math.max(0, cotCan - soCotCo);
+    const themDong = Math.max(0, dongCan - soDongCo);
+    if (!themCot && !themDong) throw new Error(thongBaoLoi);
+    const ssId = customSpreadsheetId || this._getSpreadsheetIdFor(sheetName);
+    const sheetId = await this._getSheetId(ssId, sheetName);
+    if (sheetId === null || sheetId === undefined) throw new Error(thongBaoLoi);
+    const requests = [];
+    if (themCot) requests.push({ appendDimension: { sheetId, dimension: 'COLUMNS', length: themCot } });
+    if (themDong) requests.push({ appendDimension: { sheetId, dimension: 'ROWS', length: themDong } });
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ssId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.session?.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try { detail = (await res.json()).error?.message || detail; } catch (_) {}
+      throw new Error(`Không thể nới bảng "${sheetName}": ${detail}`);
+    }
+    console.log(`[NoiBang] "${sheetName}": thêm ${themCot} cột, ${themDong} dòng ở cuối bảng`);
+  },
+
+  async _writeSheetMotLan(sheetName, range, values, customSpreadsheetId = null) {
     const token    = this.session?.accessToken;
     const fullRange = `${sheetName}!${range}`;
     const targetSpreadsheetId = customSpreadsheetId || this._getSpreadsheetIdFor(sheetName);
