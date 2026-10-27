@@ -45,7 +45,8 @@ const App = {
       }
       // [iPhone - 05/10] Da tung dang nhap, chi het han -> tu gia han im lang
       // bang chuyen trang (khong can bam nut).
-      if (this._laAppIPhone() && this.session?.email && scopeOk) {
+      // [27/10] May tinh cung tu gia han im lang nhu iPhone. Bam Dang xuat -> lan sau khong tu vao.
+      if (this.session?.email && scopeOk) {
         this._showLogin();
         this._setLoginLoading('Đang kết nối lại...');
         this._chuyenTrangDangNhap(true);
