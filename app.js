@@ -3259,6 +3259,7 @@ const App = {
     let congNo = 0;
     let soDon = 0;
     let soDonHuy = 0;   // đếm riêng, không gộp vào số đơn
+    const dsDonTongDT = [];   // các đơn đã cộng vào Tổng doanh thu (cho popup chi tiết)
 
     const dailyMap = {};
     this._doanhThuCurrentFilteredData = [];
@@ -3349,6 +3350,19 @@ const App = {
           const soPhaiThu = this._tinhSoPhaiThu(don);
           const doanhThuDon = laDonHuy ? Math.max(0, tienThucNhan) : soPhaiThu;
 
+          {
+             const dd = ngayLenDonDate.getDate(), mm = ngayLenDonDate.getMonth() + 1, yy = ngayLenDonDate.getFullYear();
+             const d2 = dd < 10 ? '0' + dd : '' + dd, m2 = mm < 10 ? '0' + mm : '' + mm;
+             dsDonTongDT.push({
+                key: `${yy}-${m2}-${d2}`,
+                ngay: `${d2}/${m2}/${yy}`,
+                maDon: don.ma_don || '',
+                khach: don.ten_khach_hang || don.ten_khach || don.brand || 'Không rõ',
+                sale: don.sale_phu_trach || '—',
+                doanhThu: doanhThuDon,
+                huy: laDonHuy
+             });
+          }
           if (laDonHuy) soDonHuy++; else soDon++;
           tongDoanhThu += doanhThuDon;
           tongThuDonKy += daThucThuFilter;
@@ -3379,6 +3393,20 @@ const App = {
 
     tongThu = tongThuDonKy + tongThuNoCu;
     soGiaoDich = soDon;
+
+    // Lưu cho popup Chi tiết Tổng doanh thu
+    this._tdtDsDon = dsDonTongDT;
+    {
+      const th = (dt) => `${dt.getMonth() + 1 < 10 ? '0' : ''}${dt.getMonth() + 1}/${dt.getFullYear()}`;
+      const nhan = {
+        month: `Tháng này (${th(startDate)})`,
+        last_month: `Tháng trước (${th(startDate)})`,
+        quarter: `Quý này (${th(startDate)} – ${th(endDate)})`,
+        year: `Năm ${startDate.getFullYear()}`,
+        custom: `Từ ${customFrom ? customFrom.split('-').reverse().join('/') : '…'} đến ${customTo ? customTo.split('-').reverse().join('/') : '…'}`
+      };
+      this._tdtNhanKy = nhan[filterType] || '';
+    }
 
     // Dòng nào có ô ngày bị Sheets đổi thành số thì gom lại để cảnh báo.
     // App đã tự đọc ra ngày nhưng ngày đó có thể bị đảo ngày/tháng nếu
@@ -3479,8 +3507,10 @@ const App = {
 
         <!-- CHỈ SỐ TỔNG -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
-          <div style="background:linear-gradient(135deg, #EDE7F6, #F3EFFB); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
-            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Tổng doanh thu</div>
+          <div onclick="App._showChiTietTongDoanhThu()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow-sm)'" style="background:linear-gradient(135deg, #EDE7F6, #F3EFFB); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm); cursor:pointer; transition:all 0.2s;" title="Bấm xem từng đơn theo ngày">
+            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+               Tổng doanh thu <span style="display:flex; align-items:center; opacity:0.6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span>
+            </div>
             <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatVND(tongDoanhThu)}</div>
           </div>
           <div style="background:linear-gradient(135deg, #FCE4EC, #FDF0F4); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
@@ -4904,6 +4934,104 @@ const App = {
 
     html += `</div>`;
     content.innerHTML = html;
+  },
+
+  // ===== POPUP CHI TIẾT TỔNG DOANH THU =====
+  // Liệt kê đúng các đơn đã cộng vào thẻ Tổng doanh thu (theo kỳ + bộ lọc đang chọn),
+  // gom theo ngày lên đơn. Mặc định chỉ hiện dòng ngày, bấm ngày để mở danh sách đơn.
+  _showChiTietTongDoanhThu() {
+    const ds = this._tdtDsDon || [];
+    const cu = document.getElementById('modal-chitiet-tdt');
+    if (cu) cu.remove();
+
+    const nhom = {};
+    ds.forEach(x => {
+      if (!nhom[x.key]) nhom[x.key] = { key: x.key, ngay: x.ngay, tong: 0, list: [] };
+      nhom[x.key].tong += x.doanhThu;
+      nhom[x.key].list.push(x);
+    });
+    const ngayArr = Object.values(nhom).sort((a, b) => b.key.localeCompare(a.key));
+    const tong = ds.reduce((s, x) => s + x.doanhThu, 0);
+    const soHuy = ds.filter(x => x.huy).length;
+    const tenThu = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    this._tdtSoNgay = ngayArr.length;
+
+    const htmlNgay = ngayArr.map((g, i) => {
+      const [y, m, d] = g.key.split('-').map(Number);
+      const thu = tenThu[new Date(y, m - 1, d).getDay()];
+      const dongDon = g.list.map(x => `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 16px 10px 34px; border-top:1px solid rgba(138,114,76,0.08); background:#FFF;">
+            <div style="min-width:0;">
+              <div style="font-weight:600; color:#2A2420; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this._escHtml(x.khach)}${x.huy ? ' <span style="font-size:11px; font-weight:700; color:#C62828; background:#FFEBEE; padding:1px 6px; border-radius:6px; margin-left:4px;">Hủy</span>' : ''}</div>
+              <div style="font-size:12px; color:#9A8F84; margin-top:2px;">${this._escHtml(x.maDon)} &middot; ${this._escHtml(x.sale)}</div>
+            </div>
+            <div style="font-weight:700; color:${x.huy ? '#9A8F84' : '#2A2420'}; font-size:14px; white-space:nowrap;">${this._formatVND(x.doanhThu)}</div>
+          </div>`).join('');
+      return `
+        <div style="border-bottom:1px solid rgba(138,114,76,0.12);">
+          <div onclick="App._tdtToggleNgay(${i})" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 16px; background:#FAF6F0; cursor:pointer; user-select:none;">
+            <div style="color:#2A2420; font-size:14px;">
+              <span id="tdt-mui-${i}" style="display:inline-block; width:14px; color:#8A724C; transition:transform 0.2s;">&#9656;</span>
+              <b>${thu}, ${g.ngay}</b>
+              <span style="color:#9A8F84; font-size:13px;">&middot; ${g.list.length} đơn</span>
+            </div>
+            <div style="font-weight:800; color:#2A2420; font-size:15px; white-space:nowrap;">${this._formatVND(g.tong)}</div>
+          </div>
+          <div id="tdt-ds-${i}" style="display:none;">${dongDon}</div>
+        </div>`;
+    }).join('');
+
+    const emptyHtml = `<div style="text-align:center; padding:48px 16px; color:#8A724C; font-style:italic;">Kỳ này chưa có đơn nào.</div>`;
+    const tomTat = `${ds.length} đơn &middot; ${ngayArr.length} ngày có đơn${soHuy ? ` &middot; ${soHuy} đơn hủy` : ''}`;
+
+    const modalHtml = `
+      <div id="modal-chitiet-tdt" onclick="if(event.target===this) this.remove()" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeIn 0.25s ease-out;">
+        <div style="background:#FAF8F5; width:100%; max-width:640px; border-radius:24px; box-shadow:0 24px 48px rgba(42,36,32,0.12), 0 0 0 1px rgba(138,114,76,0.1); display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
+
+          <div style="padding:20px 24px 12px 24px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <div>
+              <h3 style="margin:0; font-size:20px; color:#2A2420; font-weight:800; letter-spacing:-0.3px;">Chi tiết tổng doanh thu</h3>
+              <div style="font-size:13px; color:#8A724C; margin-top:4px;">${this._escHtml(this._tdtNhanKy || '')}</div>
+              <div style="font-size:13px; color:#5C544D; margin-top:2px;">${tomTat}</div>
+            </div>
+            <button onclick="document.getElementById('modal-chitiet-tdt').remove()" style="flex-shrink:0; background:rgba(138,114,76,0.08); border:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#8A724C;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div style="padding:0 24px 12px 24px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="font-size:12px; color:#9A8F84;">Theo ngày lên đơn, đúng bộ lọc đang chọn. Bấm vào ngày để xem đơn.</div>
+            ${ngayArr.length ? `<button id="tdt-nut-mo" onclick="App._tdtMoTatCa()" style="flex-shrink:0; background:#FFF; border:1px solid rgba(138,114,76,0.25); color:#8A724C; font-size:12px; font-weight:600; padding:6px 12px; border-radius:14px; cursor:pointer;">Mở tất cả</button>` : ''}
+          </div>
+
+          <div style="flex:1; overflow-y:auto; background:#FFF; border-top:1px solid rgba(138,114,76,0.12);">
+            ${ngayArr.length ? htmlNgay : emptyHtml}
+          </div>
+
+          <div style="padding:18px 24px; background:linear-gradient(135deg, #EDE7F6, #F3EFFB); display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; color:#4A3F6B; font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">Tổng cộng</div>
+            <div style="font-weight:800; color:#2A2420; font-size:22px;">${this._formatVND(tong)}</div>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  },
+
+  _tdtToggleNgay(i, moRa) {
+    const ds = document.getElementById('tdt-ds-' + i);
+    const mui = document.getElementById('tdt-mui-' + i);
+    if (!ds) return;
+    const mo = (moRa === undefined) ? ds.style.display === 'none' : moRa;
+    ds.style.display = mo ? 'block' : 'none';
+    if (mui) mui.style.transform = mo ? 'rotate(90deg)' : 'none';
+  },
+
+  _tdtMoTatCa() {
+    const nut = document.getElementById('tdt-nut-mo');
+    const moRa = !(nut && nut.dataset.dangMo === '1');
+    for (let i = 0; i < (this._tdtSoNgay || 0); i++) this._tdtToggleNgay(i, moRa);
+    if (nut) { nut.dataset.dangMo = moRa ? '1' : '0'; nut.textContent = moRa ? 'Thu gọn' : 'Mở tất cả'; }
   },
 
   _showChiTietHoan() {
