@@ -5650,6 +5650,7 @@ const App = {
         cauHinhList = chData;
         thuongRiengList = trData;
         luongCbThangList = cbData || [];
+        this._luongCbThangList = luongCbThangList;
         this._currentCauHinhList = cauHinhList;
       } catch (err) {
         if (err.message.includes('403')) {
@@ -5719,6 +5720,7 @@ const App = {
       
       this._lastCalculatedSalaryData = [];
       this._bangLuongXuatAnh = [];   // dữ liệu cho nút Xuất ảnh kế toán (mọi người có lương)
+      this._blSuaCb = [];            // [09/11] dữ liệu cho nút Sửa lương CB
       this._currentTargetMonthYear = targetMonthYear;
 
       // 3. Tính toán cho từng người
@@ -5732,14 +5734,17 @@ const App = {
         // Lương CB: ưu tiên dòng riêng của THÁNG ĐANG XEM trong tab LUONG_CB_THANG,
         // không có thì dùng mức mặc định trong CAU_HINH_LUONG.
         const luongCoBanMacDinh = this._parseCurrency(nhanVien.luong_co_ban);
-        const dongCbThang = luongCbThangList.find(r =>
-          (r.email || '').trim().toLowerCase() === email &&
-          (this._serialToMonthYear ? this._serialToMonthYear(r.thang) : (r.thang || '').trim()) === targetMonthYear &&
-          String(r.luong_co_ban || '').trim() !== '');
-        const luongCoBan = dongCbThang ? this._parseCurrency(dongCbThang.luong_co_ban) : luongCoBanMacDinh;
-        const ghiChuCbThang = dongCbThang
-          ? `<div style="font-size:11px; font-weight:500; color:#B4453C; margin-top:2px;">Riêng tháng này · mặc định ${this._formatVND(luongCoBanMacDinh)}</div>`
-          : '';
+        // [09/11] Thứ tự: riêng tháng này > mức "từ tháng" gần nhất > mặc định. Xem _timLuongCb.
+        const kqCb = this._timLuongCb(luongCbThangList, email, targetMonthYear, luongCoBanMacDinh);
+        const luongCoBan = kqCb.soTien;
+        let ghiChuCbThang = '';
+        if (kqCb.nguon === 'thang') {
+          ghiChuCbThang = `<div style="font-size:11px; font-weight:500; color:#B4453C; margin-top:2px;">Riêng tháng này · mức chung ${this._formatVND(kqCb.coSo)}</div>`;
+        } else if (kqCb.nguon === 'tu') {
+          ghiChuCbThang = `<div style="font-size:11px; font-weight:500; color:#3B7A57; margin-top:2px;">Mức áp dụng từ ${this._escHtml(kqCb.tuThang)}</div>`;
+        }
+        const idxSuaCb = this._blSuaCb.push({ email, hoTen, macDinh: luongCoBanMacDinh, kq: kqCb }) - 1;
+        ghiChuCbThang += `<button onclick="App.moSuaLuongCb(${idxSuaCb})" title="Sửa lương cơ bản" style="margin-top:4px; background:transparent; border:1px solid #CBB799; color:#9C7E5E; border-radius:10px; padding:2px 10px; font-size:12px; font-weight:600; cursor:pointer;">Sửa</button>`;
 
         // Tính thưởng riêng
         const thuongRieng = thuongRiengList
@@ -5978,6 +5983,237 @@ const App = {
       errorCont.style.display = 'block';
     } finally {
       loading.style.display = 'none';
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // [09/11/2026] SỬA LƯƠNG CƠ BẢN NGAY TRÊN BẢNG LƯƠNG
+  // Tab LUONG_CB_THANG (file lương): email | thang | luong_co_ban | ghi_chu | ap_dung
+  //   ap_dung trống          = CHỈ RIÊNG tháng đó (cách cũ từ 08/10, dòng cũ vẫn đúng)
+  //   ap_dung 'tu_thang_nay' = TỪ tháng đó trở đi, tới khi có mức "từ" mới hơn
+  // Ưu tiên: riêng tháng > mức "từ" gần nhất (≤ tháng xem) > CAU_HINH_LUONG.
+  // Ô luong_co_ban trống = dòng đã bỏ, không tính. App KHÔNG sửa CAU_HINH_LUONG,
+  // nên tháng trước không bao giờ bị đổi theo.
+  // Tháng đã chốt: khoá, phải bấm "Mở khoá" (chỉ trong lần xem này) mới sửa được.
+  // ─────────────────────────────────────────────────────────────
+  _soThang(mmyyyy) {
+    const m = /^(\d{1,2})\/(\d{4})$/.exec(String(mmyyyy || '').trim());
+    return m ? parseInt(m[2], 10) * 12 + parseInt(m[1], 10) : NaN;
+  },
+
+  _laDongTuThang(r) {
+    return String((r && r.ap_dung) || '').trim().toLowerCase() === 'tu_thang_nay';
+  },
+
+  _timLuongCb(ds, email, thang, macDinh) {
+    const e = String(email || '').trim().toLowerCase();
+    const soXem = this._soThang(thang);
+    let rieng = null, tu = null, tuSo = -Infinity;
+    (ds || []).forEach(r => {
+      if (String(r.email || '').trim().toLowerCase() !== e) return;
+      if (String(r.luong_co_ban || '').trim() === '') return;
+      const th = this._serialToMonthYear(r.thang);
+      if (this._laDongTuThang(r)) {
+        const so = this._soThang(th);
+        if (!isNaN(so) && so <= soXem && so >= tuSo) { tu = r; tuSo = so; }
+      } else if (th === thang && !rieng) {
+        rieng = r;
+      }
+    });
+    const tuThang = tu ? this._serialToMonthYear(tu.thang) : '';
+    const coSo = tu ? this._parseCurrency(tu.luong_co_ban) : macDinh;
+    if (rieng) return { soTien: this._parseCurrency(rieng.luong_co_ban), nguon: 'thang', coSo, tuThang };
+    if (tu) return { soTien: coSo, nguon: 'tu', coSo, tuThang };
+    return { soTien: macDinh, nguon: 'macdinh', coSo, tuThang: '' };
+  },
+
+  // Vị trí (0 = dòng 2 trên Sheet) của dòng cùng người + cùng tháng + cùng kiểu. -1 nếu chưa có.
+  _timDongCb(ds, email, thang, laTu) {
+    const e = String(email || '').trim().toLowerCase();
+    return (ds || []).findIndex(r =>
+      String(r.email || '').trim().toLowerCase() === e &&
+      this._serialToMonthYear(r.thang) === thang &&
+      this._laDongTuThang(r) === laTu);
+  },
+
+  _ngayHomNay() {
+    const d = new Date(), p2 = n => String(n).padStart(2, '0');
+    return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  },
+
+  moSuaLuongCb(idx) {
+    const nv = (this._blSuaCb || [])[idx];
+    if (!nv) return;
+    const thang = this._currentTargetMonthYear;
+    const modalId = 'modal-sua-luong-cb';
+    const cu = document.getElementById(modalId);
+    if (cu) cu.remove();
+
+    const tt = this._trangThaiChot;
+    const khoa = !!tt && this._moKhoaCbThang !== thang;
+    const kq = nv.kq;
+    const nguonChu = kq.nguon === 'thang' ? `riêng tháng ${thang}`
+                   : kq.nguon === 'tu' ? `áp dụng từ ${kq.tuThang}`
+                   : 'mức mặc định';
+    const chuNho = 'font-size:12px; color:#6B6B6B; font-weight:400; line-height:1.5;';
+    const nutPhu = 'padding:10px 20px; border-radius:16px; font-weight:600;';
+    const nutChinh = 'padding:10px 20px; border-radius:16px; font-weight:600; background:var(--clr-accent-gradient); color:#fff; border:none; box-shadow:0 2px 6px rgba(156,126,94,0.3);';
+
+    let than = '';
+    if (khoa) {
+      than = `
+        <div style="background:#FFF4E5; border:1px solid #F0C98B; border-radius:12px; padding:14px; font-size:14px; color:#7A4A12; line-height:1.6; margin-bottom:24px;">
+          <b>Lương tháng ${this._escHtml(thang)} đã chốt</b> lúc ${this._escHtml(String(tt.ngay_chot || '').replace(/^'/, ''))}.<br>
+          Nếu sửa, bảng lương sẽ khác số đã chốt. Sửa xong anh phải bấm <b>Chốt lại</b> để ghi số mới vào file của nhân viên.
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="document.getElementById('${modalId}').remove()" style="${nutPhu}">Hủy</button>
+          <button class="btn btn-primary" onclick="App._moKhoaSuaCb(${idx})" style="${nutChinh}">Mở khoá để sửa</button>
+        </div>`;
+    } else {
+      // Mức "từ tháng" ở các tháng SAU tháng đang xem: báo trước để khỏi bất ngờ
+      const soXem = this._soThang(thang);
+      const e = nv.email.toLowerCase();
+      const sau = (this._luongCbThangList || []).filter(r =>
+        String(r.email || '').trim().toLowerCase() === e && this._laDongTuThang(r) &&
+        String(r.luong_co_ban || '').trim() !== '' && this._soThang(this._serialToMonthYear(r.thang)) > soXem)
+        .map(r => this._serialToMonthYear(r.thang));
+      const canhBaoSau = sau.length
+        ? `<div style="${chuNho} color:#B4453C; margin-top:6px;">Lưu ý: đã có mức khác áp dụng từ ${this._escHtml(sau.join(', '))}. Từ tháng đó vẫn dùng mức ấy.</div>` : '';
+
+      let nutBo = '';
+      if (kq.nguon === 'thang') {
+        nutBo = `<button onclick="App._boDongCb(${idx}, false)" style="background:transparent; border:none; color:#B4453C; text-decoration:underline; cursor:pointer; font-size:13px; padding:0;">Bỏ mức riêng tháng này (về ${this._formatVND(kq.coSo)})</button>`;
+      } else if (kq.nguon === 'tu' && kq.tuThang === thang) {
+        nutBo = `<button onclick="App._boDongCb(${idx}, true)" style="background:transparent; border:none; color:#B4453C; text-decoration:underline; cursor:pointer; font-size:13px; padding:0;">Bỏ mức áp dụng từ ${this._escHtml(thang)}</button>`;
+      }
+
+      const o = 'display:flex; gap:10px; align-items:flex-start; padding:12px; border:1px solid #EFEBE4; border-radius:12px; background:#FBF9F6; cursor:pointer; margin-bottom:10px; font-size:14px; font-weight:600; color:#2A2420;';
+      than = `
+        <div style="font-size:14px; color:#2A2420; margin-bottom:18px; line-height:1.6;">
+          Hiện tại: <b>${this._formatVND(kq.soTien)}</b> <span style="${chuNho}">(${this._escHtml(nguonChu)})</span>
+        </div>
+        <div class="form-group" style="margin-bottom:18px;">
+          <label class="form-label" style="color:#2A2420; font-size:14px; font-weight:600; margin-bottom:8px; display:block;">Lương cơ bản mới (VNĐ) *</label>
+          <input type="text" inputmode="numeric" id="cb-sotien" class="form-input" value="${(Math.round(kq.soTien) || 0).toLocaleString('vi-VN')}" style="width:100%; padding:10px 16px; border-radius:12px; border:1px solid #EFEBE4; outline:none; background:#FBF9F6; color:#2A2420; font-size:16px; font-weight:700;" oninput="let v = this.value.replace(/[^0-9]/g, ''); this.value = v ? parseInt(v, 10).toLocaleString('vi-VN') : '';" />
+        </div>
+        <div style="color:#2A2420; font-size:14px; font-weight:600; margin-bottom:8px;">Áp dụng *</div>
+        <label style="${o}"><input type="radio" name="cb-apdung" value="thang" style="margin-top:3px;" />
+          <span>Chỉ riêng tháng ${this._escHtml(thang)}<br><span style="${chuNho}">Tháng sau tự quay về mức cũ. Dùng cho trừ/bù lương một tháng.</span></span></label>
+        <label style="${o}"><input type="radio" name="cb-apdung" value="tu" style="margin-top:3px;" />
+          <span>Từ tháng ${this._escHtml(thang)} trở đi<br><span style="${chuNho}">Dùng khi tăng/giảm lương lâu dài. Các tháng trước giữ nguyên.</span></span></label>
+        ${canhBaoSau}
+        <div class="form-group" style="margin:18px 0 20px;">
+          <label class="form-label" style="color:#2A2420; font-size:14px; font-weight:600; margin-bottom:8px; display:block;">Ghi chú</label>
+          <input type="text" id="cb-ghichu" class="form-input" placeholder="Ví dụ: Tăng lương sau thử việc" style="width:100%; padding:10px 16px; border-radius:12px; border:1px solid #EFEBE4; outline:none; background:#FBF9F6; color:#2A2420; font-size:14px;" />
+        </div>
+        ${nutBo ? `<div style="margin-bottom:20px;">${nutBo}</div>` : ''}
+        <div style="display:flex; justify-content:flex-end; gap:12px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="document.getElementById('${modalId}').remove()" style="${nutPhu}">Hủy</button>
+          <button id="btn-luu-cb" class="btn btn-primary" onclick="App.luuLuongCb(${idx})" style="${nutChinh}">Lưu lương CB</button>
+        </div>`;
+    }
+
+    const html = `
+      <div id="${modalId}" onclick="if(event.target===this) this.remove()" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(42,36,32,0.4); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div style="background:#FFFFFF; width:460px; max-width:92%; max-height:90vh; overflow:auto; border-radius:24px; box-shadow:var(--shadow-lg); animation:slideIn 0.3s ease;">
+          <div style="padding:20px 24px; border-bottom:1px solid #EFEBE4; display:flex; justify-content:space-between; align-items:center; background:#FBF9F6;">
+            <div>
+              <div style="font-weight:700; color:#9C7E5E; font-size:18px;">Sửa lương cơ bản</div>
+              <div style="font-size:13px; color:#6B6B6B; margin-top:2px;">${this._escHtml(nv.hoTen)} · tháng ${this._escHtml(thang)}</div>
+            </div>
+            <button onclick="document.getElementById('${modalId}').remove()" style="background:transparent; border:none; cursor:pointer; font-size:24px; color:#9C7E5E; line-height:1;">&times;</button>
+          </div>
+          <div style="padding:24px;">${than}</div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  },
+
+  _moKhoaSuaCb(idx) {
+    this._moKhoaCbThang = this._currentTargetMonthYear;
+    this.moSuaLuongCb(idx);
+  },
+
+  async luuLuongCb(idx) {
+    const nv = (this._blSuaCb || [])[idx];
+    if (!nv) return;
+    const thang = this._currentTargetMonthYear;
+    const soStr = (document.getElementById('cb-sotien')?.value || '').replace(/[^0-9]/g, '');
+    const chon = document.querySelector('input[name="cb-apdung"]:checked');
+    if (soStr === '') { alert('Vui lòng nhập lương cơ bản mới (có thể là 0).'); return; }
+    if (!chon) { alert('Vui lòng chọn: chỉ riêng tháng này, hay từ tháng này trở đi.'); return; }
+    const soTien = parseInt(soStr, 10);
+    const laTu = chon.value === 'tu';
+    const ghiChu = (document.getElementById('cb-ghichu')?.value || '').trim() || `Sửa trên app ${this._ngayHomNay()}`;
+    const cauHoi = laTu
+      ? `Lương CB của ${nv.hoTen} = ${this._formatVND(soTien)} TỪ tháng ${thang} trở đi?\nCác tháng trước giữ nguyên.`
+      : `Lương CB của ${nv.hoTen} = ${this._formatVND(soTien)} CHỈ RIÊNG tháng ${thang}?`;
+    if (!confirm(cauHoi)) return;
+
+    const btn = document.getElementById('btn-luu-cb');
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Đang lưu...'; }
+    const SH = CONFIG.SHEETS.LUONG_CB_THANG || 'LUONG_CB_THANG';
+    try {
+      // Đọc lại tab ngay trước khi ghi để số dòng chắc chắn đúng (có thể ai đó vừa sửa Sheet)
+      const ds = await this._readSheet(this.session.accessToken, SH);
+      this._luongCbThangList = ds;
+      if (laTu) await this._writeSheet(SH, 'E1', [['ap_dung']]);   // tiêu đề cột mới, ghi lại cũng không sao
+
+      const iDong = this._timDongCb(ds, nv.email, thang, laTu);
+      if (iDong >= 0) {
+        const r = iDong + 2;
+        await this._writeSheet(SH, `C${r}:D${r}`, [[soTien, ghiChu]]);
+      } else {
+        // Dấu nháy: giữ '11/2026' là CHỮ, không để Sheets đổi thành ngày
+        await this._appendSheet(SH, [[nv.email, `'${thang}`, soTien, ghiChu, laTu ? 'tu_thang_nay' : '']]);
+      }
+
+      // Chọn "từ tháng này" mà tháng này đang có mức riêng -> bỏ mức riêng, kẻo nó đè mức mới
+      if (laTu) {
+        const iRieng = this._timDongCb(ds, nv.email, thang, false);
+        if (iRieng >= 0 && String(ds[iRieng].luong_co_ban || '').trim() !== '') {
+          const r = iRieng + 2;
+          const note = `${ds[iRieng].ghi_chu || ''} · đã bỏ ${this._ngayHomNay()} (thay bằng mức từ ${thang})`.replace(/^ · /, '');
+          await this._writeSheet(SH, `C${r}:D${r}`, [['', note]]);
+        }
+      }
+
+      document.getElementById('modal-sua-luong-cb')?.remove();
+      await this.loadBangLuong();
+      alert(this._trangThaiChot
+        ? `Đã lưu. Tháng ${thang} đã chốt trước đó nên nút Chốt chuyển màu cam. Kiểm lại bảng rồi bấm Chốt lại.`
+        : 'Đã lưu lương cơ bản.');
+    } catch (err) {
+      console.error('[Sửa lương CB]', err);
+      alert('Lỗi khi lưu lương CB: ' + err.message);
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Lưu lương CB'; }
+    }
+  },
+
+  // Bỏ một mức đã đặt: xoá trống ô số tiền (giữ dòng + ghi chú để còn dấu vết)
+  async _boDongCb(idx, laTu) {
+    const nv = (this._blSuaCb || [])[idx];
+    if (!nv) return;
+    const thang = this._currentTargetMonthYear;
+    const cauHoi = laTu
+      ? `Bỏ mức lương CB áp dụng từ ${thang} của ${nv.hoTen}?\nTừ tháng này sẽ quay về mức trước đó.`
+      : `Bỏ mức lương CB riêng tháng ${thang} của ${nv.hoTen}?`;
+    if (!confirm(cauHoi)) return;
+    const SH = CONFIG.SHEETS.LUONG_CB_THANG || 'LUONG_CB_THANG';
+    try {
+      const ds = await this._readSheet(this.session.accessToken, SH);
+      this._luongCbThangList = ds;
+      const i = this._timDongCb(ds, nv.email, thang, laTu);
+      if (i < 0) { alert('Không tìm thấy dòng này trên Sheet (có thể đã được sửa tay). Bấm Xem để tải lại.'); return; }
+      const r = i + 2;
+      const note = `${ds[i].ghi_chu || ''} · đã bỏ ${this._ngayHomNay()}`.replace(/^ · /, '');
+      await this._writeSheet(SH, `C${r}:D${r}`, [['', note]]);
+      document.getElementById('modal-sua-luong-cb')?.remove();
+      await this.loadBangLuong();
+    } catch (err) {
+      console.error('[Bỏ lương CB]', err);
+      alert('Lỗi: ' + err.message);
     }
   },
 
